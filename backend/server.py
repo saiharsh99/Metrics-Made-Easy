@@ -1130,15 +1130,20 @@ async def analytics_audience(
 
             new_vs_returning = []
             for r in nvr_raw.get("rows", []):
+                sessions = int(r.get("sessions", 0) or 0)
+                conversions = int(r.get("conversions", 0) or 0)
                 new_vs_returning.append(
                     {
                         "type": r.get("newVsReturning", ""),
                         "users": int(r.get("activeUsers", 0) or 0),
-                        "sessions": int(r.get("sessions", 0) or 0),
+                        "sessions": sessions,
                         "avgDuration": round(
                             float(r.get("averageSessionDuration", 0) or 0), 2
                         ),
-                        "conversions": int(r.get("conversions", 0) or 0),
+                        "conversions": conversions,
+                        "conversionRate": round(
+                            conversions / sessions * 100 if sessions else 0.0, 2
+                        ),
                     }
                 )
 

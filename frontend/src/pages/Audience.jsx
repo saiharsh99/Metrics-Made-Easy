@@ -315,11 +315,11 @@ export default function Audience() {
                       <Kv label="Sessions" value={formatNumber(r.sessions)} />
                       <Kv
                         label="Avg dur."
-                        value={`${Math.round(r.avgDuration)}s`}
+                        value={`${Math.round(r.avgDuration ?? 0)}s`}
                       />
                       <Kv
                         label="CR"
-                        value={`${r.conversionRate.toFixed(2)}%`}
+                        value={`${(r.conversionRate ?? 0).toFixed(2)}%`}
                         highlight={r.type === "returning"}
                       />
                     </div>

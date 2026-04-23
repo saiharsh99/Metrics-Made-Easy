@@ -7,6 +7,7 @@ import {
   Broadcast,
   UsersThree,
   MapPin,
+  VideoCamera,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
@@ -14,10 +15,11 @@ import { Badge } from "@/components/ui/badge";
 
 const NAV = [
   { to: "/", label: "Overview", icon: ChartLineUp, testId: "nav-overview" },
-  { to: "/landing-pages", label: "Landing Pages", icon: Stack, testId: "nav-landing-pages" },
+  { to: "/landing-pages", label: "Pages", icon: Stack, testId: "nav-landing-pages" },
   { to: "/sources", label: "Sources", icon: Broadcast, testId: "nav-sources" },
   { to: "/audience", label: "Audience", icon: UsersThree, testId: "nav-audience" },
   { to: "/locations", label: "Locations", icon: MapPin, testId: "nav-locations" },
+  { to: "/clarity", label: "Clarity", icon: VideoCamera, testId: "nav-clarity" },
   { to: "/compare", label: "Compare", icon: ArrowsLeftRight, testId: "nav-compare" },
   { to: "/settings", label: "Settings", icon: GearSix, testId: "nav-settings" },
 ];
