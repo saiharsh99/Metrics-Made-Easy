@@ -1,34 +1,54 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+.App {
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.display-font {
+  font-family: "Chivo", -apple-system, BlinkMacSystemFont, sans-serif;
+  letter-spacing: -0.02em;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+.mono-font {
+  font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.App-link {
-    color: #61dafb;
+/* Recharts overrides for a more Swiss look */
+.recharts-cartesian-grid line {
+  stroke: #e4e4e7;
+}
+.recharts-cartesian-axis-tick-value {
+  fill: #71717a;
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 11px;
+}
+.recharts-default-tooltip {
+  border: 1px solid #e4e4e7 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px rgba(9, 9, 11, 0.08) !important;
+  font-family: "IBM Plex Sans", sans-serif !important;
+}
+.recharts-tooltip-label {
+  color: #09090b !important;
+  font-weight: 600 !important;
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+/* Staggered entrance */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.enter-anim {
+  animation: fadeUp 0.45s ease-out both;
+}
+
+/* Selection */
+::selection {
+  background: #09090b;
+  color: #fff;
 }
