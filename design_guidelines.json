@@ -1,0 +1,181 @@
+{
+  "project_type": "Dashboard",
+  "theme": "light",
+  "archetype": "4 (Swiss & High-Contrast)",
+  "rationale": "For an analytics dashboard connecting Google Analytics and Microsoft Clarity, the objective is high fidelity, clear data correlation, and authoritative action. Using a Swiss & High-Contrast design ensures the metrics are incredibly legible and professional, avoiding decorative clutter while highlighting actionable operational insights.",
+  "typography": {
+    "font_strategy": "The 'Old Money Tech' variant for dashboards: authoritative headings with stark sterile body.",
+    "headings": {
+      "family": "Chivo",
+      "import": "https://fonts.googleapis.com/css2?family=Chivo:wght@300;400;700;900&display=swap",
+      "rules": [
+        "No Inter or Roboto.",
+        "Tracking must be extremely tight (`tracking-tighter`) for >32px.",
+        "Use font-black for major KPIs, font-light for elegant subtitles."
+      ],
+      "sizes": {
+        "h1": "text-4xl sm:text-5xl",
+        "h2": "text-2xl sm:text-3xl lg:text-4xl",
+        "h3": "text-xl sm:text-2xl",
+        "h4": "text-lg sm:text-xl",
+        "overline": "text-xs tracking-[0.2em] uppercase font-bold text-zinc-500"
+      }
+    },
+    "body": {
+      "family": "IBM Plex Sans",
+      "import": "https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&display=swap",
+      "rules": [
+        "Clean, legible for dense data.",
+        "Line height: leading-relaxed for paragraphs, leading-none for table cells."
+      ],
+      "sizes": {
+        "base": "text-sm md:text-base",
+        "small": "text-xs text-zinc-600"
+      }
+    }
+  },
+  "colors": {
+    "palette": {
+      "background": {
+        "main": "bg-zinc-50",
+        "card": "bg-white"
+      },
+      "text": {
+        "primary": "text-zinc-950",
+        "secondary": "text-zinc-600",
+        "muted": "text-zinc-400",
+        "inverse": "text-white"
+      },
+      "border": {
+        "default": "border-zinc-200",
+        "hover": "border-zinc-300",
+        "focus": "border-zinc-950"
+      },
+      "brand": {
+        "primary": "bg-zinc-950",
+        "hover": "bg-zinc-800",
+        "accent": "bg-blue-600"
+      },
+      "data_viz": {
+        "google_analytics": "#2563eb",
+        "microsoft_clarity": "#16a34a",
+        "rage_click": "#dc2626",
+        "dead_click": "#f59e0b",
+        "pageviews": "#0ea5e9",
+        "bounces": "#ef4444"
+      }
+    },
+    "rules": [
+      "Color is Function Only. 95% of UI should be monochrome.",
+      "Use data_viz colors exclusively for charts, sparklines, and metric indicators.",
+      "Hover states must be explicitly declared, e.g., hover:bg-zinc-100 hover:text-zinc-900."
+    ]
+  },
+  "layout_and_spacing": {
+    "protocol": "MODE B: THE CONTROL ROOM GRID",
+    "grid": {
+      "base": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4",
+      "gap": "gap-4 md:gap-6",
+      "spans": {
+        "summary_widget": "col-span-1",
+        "main_chart": "col-span-2 row-span-2 lg:col-span-3",
+        "feed_list": "col-span-1 row-span-2"
+      }
+    },
+    "spacing": {
+      "generous": "Use p-6 or p-8 inside cards to avoid text collision.",
+      "page_padding": "p-4 md:p-8 lg:p-12"
+    },
+    "alignment": {
+      "general": "Optical alignment over geometrical. Left-align tables and lists. Top-left North Star metrics (F-pattern)."
+    }
+  },
+  "surfaces": {
+    "header": {
+      "style": "Glassmorphism (Crystal)",
+      "classes": "sticky top-0 z-50 bg-white/70 backdrop-blur-xl border-b border-zinc-200/50 shadow-sm"
+    },
+    "cards": {
+      "style": "Grid Borders & Technical Flat",
+      "classes": "bg-white border border-zinc-200 rounded-lg shadow-none",
+      "hover_classes": "transition-all duration-200 hover:-translate-y-1 hover:shadow-lg hover:border-zinc-300"
+    },
+    "badges": {
+      "style": "Subtle Tinted",
+      "classes": "px-2 py-1 rounded-md text-xs font-medium bg-zinc-100 text-zinc-800 border border-zinc-200"
+    }
+  },
+  "motion_and_interactions": {
+    "transitions": "transition-all duration-200 ease-out",
+    "micro_interactions": [
+      "Hover lift on data cards.",
+      "Staggered entrance for list items.",
+      "Smooth tooltip fade-ins for charts."
+    ],
+    "accessibility": "respect prefers-reduced-motion"
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "rationale": "Phosphor Icons provide excellent legibility for dense dashboards and data tools.",
+    "install_command": "npm install @phosphor-icons/react or yarn add @phosphor-icons/react"
+  },
+  "components": {
+    "charts": {
+      "library": "recharts or shadcn/ui charts",
+      "rules": [
+        "Line charts for session trends.",
+        "Bar charts for traffic sources.",
+        "Donut charts for device categories.",
+        "Ensure responsive containers (width: 100%, height: 300px min)."
+      ]
+    },
+    "tables": {
+      "rules": [
+        "Left aligned text, right aligned numbers.",
+        "Sticky headers for scrollable data.",
+        "Inline sparklines for metric trends."
+      ]
+    },
+    "shadcn": [
+      "Card (Customized to be flat with 1px border)",
+      "Tabs (For switching GA / Clarity / Combined)",
+      "Select (For Date Range and Filtering)",
+      "Table",
+      "Badge",
+      "Button"
+    ]
+  },
+  "media": {
+    "image_urls": [
+      {
+        "category": "user_avatar_1",
+        "url": "https://images.unsplash.com/photo-1655249481446-25d575f1c054?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwzfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMHByb2ZpbGV8ZW58MHx8fHwxNzc2OTI1NDkyfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Professional headshot of a woman, useful for session replay user avatars."
+      },
+      {
+        "category": "user_avatar_2",
+        "url": "https://images.unsplash.com/flagged/photo-1579967353707-713ede7a3bba?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMHByb2ZpbGV8ZW58MHx8fHwxNzc2OTI1NDkyfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Professional headshot of a man, useful for session replay user avatars."
+      },
+      {
+        "category": "user_avatar_3",
+        "url": "https://images.unsplash.com/photo-1652471943570-f3590a4e52ed?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHw0fHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMHByb2ZpbGV8ZW58MHx8fHwxNzc2OTI1NDkyfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Professional headshot of a man in suit, useful for session replay user avatars."
+      },
+      {
+        "category": "user_avatar_4",
+        "url": "https://images.unsplash.com/photo-1655249493799-9cee4fe983bb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzV8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMHByb2ZpbGV8ZW58MHx8fHwxNzc2OTI1NDkyfDA&ixlib=rb-4.1.0&q=85",
+        "description": "Professional headshot of a person, useful for session replay user avatars."
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL: Use .js and .jsx extensions exclusively (NO TypeScript/.tsx).",
+    "Use pure functional components with Tailwind CSS for layout.",
+    "Implement the 'Control Room' Grid exactly as specified, with dense spacing but generous padding inside cards.",
+    "Do not use generic 'Inter' or 'Roboto'. Use 'Chivo' for headings and 'IBM Plex Sans' for body text. Add these to your index.html or global css.",
+    "Integrate Phosphor icons as the primary icon set.",
+    "Build the dashboard focusing on the North Star Metrics (F-Pattern).",
+    "Every interactive or informational element MUST include a data-testid attribute in kebab-case."
+  ]
+}
