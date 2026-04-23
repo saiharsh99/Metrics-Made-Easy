@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, formatNumber } from "@/lib/api";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,13 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Plus, Trash, ArrowRight, Link as LinkIcon } from "@phosphor-icons/react";
+import {
+  Plus,
+  Trash,
+  ArrowRight,
+  Link as LinkIcon,
+  PencilSimple,
+} from "@phosphor-icons/react";
 
 const BLANK = {
   name: "",
@@ -30,6 +36,8 @@ export default function LandingPages() {
   const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState("create"); // "create" | "edit"
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(BLANK);
   const [submitting, setSubmitting] = useState(false);
 
@@ -49,6 +57,27 @@ export default function LandingPages() {
     fetchPages();
   }, []);
 
+  const openCreate = () => {
+    setMode("create");
+    setEditingId(null);
+    setForm(BLANK);
+    setOpen(true);
+  };
+
+  const openEdit = (p) => {
+    setMode("edit");
+    setEditingId(p.id);
+    setForm({
+      name: p.name || "",
+      url: p.url || "",
+      description: p.description || "",
+      ga_property_id: p.ga_property_id || "",
+      ga_path_filter: p.ga_path_filter || "",
+      clarity_project_id: p.clarity_project_id || "",
+    });
+    setOpen(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name || !form.url) {
@@ -57,13 +86,19 @@ export default function LandingPages() {
     }
     setSubmitting(true);
     try {
-      await api.post("/landing-pages", form);
-      toast.success("Landing page added");
+      if (mode === "edit" && editingId) {
+        await api.patch(`/landing-pages/${editingId}`, form);
+        toast.success("Landing page updated");
+      } else {
+        await api.post("/landing-pages", form);
+        toast.success("Landing page added");
+      }
       setOpen(false);
       setForm(BLANK);
+      setEditingId(null);
       fetchPages();
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Failed to create");
+      toast.error(e.response?.data?.detail || "Failed to save");
     } finally {
       setSubmitting(false);
     }
@@ -91,24 +126,33 @@ export default function LandingPages() {
             Landing pages
           </h1>
           <p className="mt-3 text-sm text-zinc-600 max-w-2xl">
-            Every page you want to monitor. Add a GA path filter so metrics are scoped
-            to the right URL, and an optional Clarity project ID for that page.
+            Every page you want to monitor. Add a GA path filter so metrics are
+            scoped to the right URL, and an optional Clarity project ID for that
+            page.
           </p>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button
+              onClick={openCreate}
               className="bg-zinc-950 hover:bg-zinc-800 text-white"
               data-testid="open-add-lp"
             >
               <Plus size={16} weight="bold" className="mr-2" /> Add landing page
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[500px] bg-white" data-testid="add-lp-dialog">
+          <DialogContent
+            className="sm:max-w-[500px] bg-white"
+            data-testid="lp-dialog"
+          >
             <DialogHeader>
-              <DialogTitle className="display-font tracking-tight">New landing page</DialogTitle>
+              <DialogTitle className="display-font tracking-tight">
+                {mode === "edit" ? "Edit landing page" : "New landing page"}
+              </DialogTitle>
               <DialogDescription>
-                Connect a page you want Lens to track. You can edit these details later.
+                {mode === "edit"
+                  ? "Update the page details. Changes apply to all dashboards immediately."
+                  : "Connect a page you want Lens to track. You can edit these details later."}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -134,7 +178,7 @@ export default function LandingPages() {
                 value={form.ga_path_filter}
                 onChange={(v) => setForm({ ...form, ga_path_filter: v })}
                 placeholder="/bf-2025"
-                hint="Used as a 'contains' filter on pagePath in the GA4 Data API."
+                hint="Used as a 'contains' filter on pagePath in the GA4 Data API. Leave empty to track the whole property."
               />
               <Field
                 id="lp-clarity"
@@ -144,13 +188,18 @@ export default function LandingPages() {
                 placeholder="abc123def"
               />
               <div>
-                <Label htmlFor="lp-desc" className="text-xs uppercase tracking-wider font-semibold">
+                <Label
+                  htmlFor="lp-desc"
+                  className="text-xs uppercase tracking-wider font-semibold"
+                >
                   Description
                 </Label>
                 <Textarea
                   id="lp-desc"
                   value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, description: e.target.value })
+                  }
                   placeholder="Campaign context, hypothesis, goal…"
                   rows={3}
                   className="mt-1.5"
@@ -162,7 +211,7 @@ export default function LandingPages() {
                   type="button"
                   variant="outline"
                   onClick={() => setOpen(false)}
-                  data-testid="cancel-add-lp"
+                  data-testid="cancel-lp-dialog"
                 >
                   Cancel
                 </Button>
@@ -170,9 +219,15 @@ export default function LandingPages() {
                   type="submit"
                   disabled={submitting}
                   className="bg-zinc-950 hover:bg-zinc-800 text-white"
-                  data-testid="submit-add-lp"
+                  data-testid="submit-lp-dialog"
                 >
-                  {submitting ? "Adding…" : "Add page"}
+                  {submitting
+                    ? mode === "edit"
+                      ? "Saving…"
+                      : "Adding…"
+                    : mode === "edit"
+                    ? "Save changes"
+                    : "Add page"}
                 </Button>
               </DialogFooter>
             </form>
@@ -182,18 +237,23 @@ export default function LandingPages() {
 
       <div className="bg-white border border-zinc-200 rounded-lg overflow-hidden">
         {loading && (
-          <div className="p-12 text-center text-zinc-500" data-testid="pages-loading">
+          <div
+            className="p-12 text-center text-zinc-500"
+            data-testid="pages-loading"
+          >
             Loading…
           </div>
         )}
         {!loading && pages.length === 0 && (
           <div className="p-16 text-center" data-testid="pages-empty">
-            <div className="display-font text-2xl font-bold mb-2">No pages yet</div>
+            <div className="display-font text-2xl font-bold mb-2">
+              No pages yet
+            </div>
             <p className="text-sm text-zinc-500 mb-6">
               Add your first landing page to start tracking performance.
             </p>
             <Button
-              onClick={() => setOpen(true)}
+              onClick={openCreate}
               className="bg-zinc-950 hover:bg-zinc-800 text-white"
               data-testid="empty-add-lp"
             >
@@ -210,20 +270,49 @@ export default function LandingPages() {
                 data-testid={`page-item-${p.id}`}
               >
                 <div className="w-10 h-10 bg-zinc-100 border border-zinc-200 flex items-center justify-center rounded-md">
-                  <LinkIcon size={18} weight="duotone" className="text-zinc-600" />
+                  <LinkIcon
+                    size={18}
+                    weight="duotone"
+                    className="text-zinc-600"
+                  />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="display-font font-bold text-lg leading-tight truncate">
                     {p.name}
                   </div>
-                  <div className="text-xs mono-font text-zinc-500 truncate">{p.url}</div>
-                  {p.description && (
-                    <div className="text-xs text-zinc-500 mt-1 truncate max-w-xl">
-                      {p.description}
-                    </div>
-                  )}
+                  <div className="text-xs mono-font text-zinc-500 truncate">
+                    {p.url}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                    {p.ga_path_filter && (
+                      <span
+                        className="text-[10px] uppercase tracking-wider font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded"
+                        data-testid={`path-filter-${p.id}`}
+                      >
+                        path: <span className="mono-font normal-case">{p.ga_path_filter}</span>
+                      </span>
+                    )}
+                    {p.clarity_project_id && (
+                      <span className="text-[10px] uppercase tracking-wider font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                        clarity: <span className="mono-font normal-case">{p.clarity_project_id}</span>
+                      </span>
+                    )}
+                    {p.description && (
+                      <span className="text-xs text-zinc-500 truncate max-w-md">
+                        {p.description}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => openEdit(p)}
+                    className="border-zinc-200 hover:bg-zinc-100"
+                    data-testid={`edit-page-${p.id}`}
+                  >
+                    <PencilSimple size={14} className="mr-1" /> Edit
+                  </Button>
                   <Button
                     asChild
                     variant="outline"
@@ -256,7 +345,10 @@ export default function LandingPages() {
 function Field({ id, label, value, onChange, placeholder, hint, required }) {
   return (
     <div>
-      <Label htmlFor={id} className="text-xs uppercase tracking-wider font-semibold">
+      <Label
+        htmlFor={id}
+        className="text-xs uppercase tracking-wider font-semibold"
+      >
         {label} {required && <span className="text-rose-600">*</span>}
       </Label>
       <Input

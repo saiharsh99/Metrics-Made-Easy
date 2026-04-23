@@ -125,6 +125,14 @@ export default function LandingPageDetail() {
         </div>
         <div className="flex items-center gap-3">
           <DateRangePicker value={range} onChange={setRange} />
+          <Button
+            asChild
+            variant="outline"
+            className="border-zinc-200 hover:bg-zinc-100"
+            data-testid="edit-lp-btn"
+          >
+            <Link to="/landing-pages">Edit page</Link>
+          </Button>
         </div>
       </div>
 
