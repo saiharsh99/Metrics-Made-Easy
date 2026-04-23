@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 2 focused on the 3 new insights endpoints (sources/audience/locations) and 3 new pages (Sources/Audience/Locations) + shared InsightsFilters. Added /app/backend/tests/test_insights_api.py (12 tests) — all pass. Combined with existing suite: 31/31 backend tests pass. Frontend Playwright covered nav-sources/nav-audience/nav-locations links, page loads, LP dropdown refetch, date range display, channel-mix (8 channels), daily trend chart, source/medium table client-side search, audience stat cards + device/browser/OS/interests/new-vs-returning, locations KPIs + country flags + countries-table sorted by users desc + top cities + auto-insight cards. Previous pages (/, /landing-pages, /compare, /settings) still load after nav additions. Zero console errors. No MongoDB _id leakage anywhere.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_insights_api.py",
+    "/app/backend/tests/test_analytics_api.py",
+    "/app/test_reports/pytest/pytest_insights_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py now ~1100 lines — time to split into routers (credentials, landing_pages, analytics_overview, analytics_aggregate) + helpers.py. Maintainability will degrade beyond this size.",
+    "analytics_audience live path sums activeUsers from newVsReturning rows for users.total but falls back to demo['users']['total'] only when nvr_raw is empty; if GA4 returns only one of new/returning, returning = total-new can go negative. Consider max(0, total - new).",
+    "analytics_locations live path sets city.countryCode = '' (not returned by current ga4_service.locations_cities). Either pull countryId dimension or drop the empty field to avoid misleading frontend flag renders.",
+    "_resolve_scope returns ga_filter only for a single LP; aggregate mode ignores per-LP ga_path_filter. Acceptable in demo but when GA4 live is enabled across multiple LPs the aggregate endpoints will silently fall back to demo — add a log line or feature flag to surface this.",
+    "FastAPI @app.on_event is still used (deprecated) — migrate to lifespan; same note as iteration_1.",
+    "Clarity cache invalidation on credentials save/delete still missing — same note as iteration_1."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_insights_api.py (new)"
+  ],
+  "success_rate": { "backend": "100% (31/31)", "frontend": "100%" },
+  "test_credentials": "N/A (no auth; DEMO mode)",
+  "seed_data_creation": "Relies on 3 auto-seeded LPs from server startup; no new seed data created in this iteration.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/ -v` for full backend coverage (31 tests). New insights endpoints: GET /api/analytics/sources, /api/analytics/audience, /api/analytics/locations all accept optional lp_id (omit or 'all' for aggregate; concrete id for single-LP; unknown id -> 404) and optional start_date/end_date (yyyy-mm-dd or <N>daysAgo). Demo data is deterministic per (lp_urls, start, end). Frontend pages live at /sources, /audience, /locations and share the InsightsFilters component (data-testid insights-lp-select, insights-lp-all, insights-lp-<id>).",
+  "rca of the issue": "No bugs found."
+}

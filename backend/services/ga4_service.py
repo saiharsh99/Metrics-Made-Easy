@@ -138,6 +138,131 @@ class GA4Service:
             limit=15,
         )
 
+    def sources_aggregate(
+        self,
+        start: str,
+        end: str,
+        url_filter: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Detailed source / medium / channel level performance."""
+        return self._run_report(
+            dimensions=[
+                "sessionDefaultChannelGroup",
+                "sessionSource",
+                "sessionMedium",
+            ],
+            metrics=[
+                "sessions",
+                "activeUsers",
+                "newUsers",
+                "conversions",
+                "bounceRate",
+                "averageSessionDuration",
+            ],
+            start_date=start,
+            end_date=end,
+            url_filter=url_filter,
+            limit=200,
+        )
+
+    def sources_trend(
+        self,
+        start: str,
+        end: str,
+        url_filter: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        return self._run_report(
+            dimensions=["date", "sessionDefaultChannelGroup"],
+            metrics=["sessions"],
+            start_date=start,
+            end_date=end,
+            url_filter=url_filter,
+            limit=1000,
+        )
+
+    def audience_devices(self, start: str, end: str, url_filter: Optional[str] = None):
+        return self._run_report(
+            dimensions=["deviceCategory"],
+            metrics=["sessions", "activeUsers"],
+            start_date=start,
+            end_date=end,
+            url_filter=url_filter,
+        )
+
+    def audience_browsers(self, start: str, end: str, url_filter: Optional[str] = None):
+        return self._run_report(
+            dimensions=["browser"],
+            metrics=["sessions"],
+            start_date=start,
+            end_date=end,
+            url_filter=url_filter,
+            limit=20,
+        )
+
+    def audience_os(self, start: str, end: str, url_filter: Optional[str] = None):
+        return self._run_report(
+            dimensions=["operatingSystem"],
+            metrics=["sessions"],
+            start_date=start,
+            end_date=end,
+            url_filter=url_filter,
+            limit=20,
+        )
+
+    def audience_languages(self, start: str, end: str, url_filter: Optional[str] = None):
+        return self._run_report(
+            dimensions=["language"],
+            metrics=["sessions"],
+            start_date=start,
+            end_date=end,
+            url_filter=url_filter,
+            limit=15,
+        )
+
+    def audience_new_returning(
+        self, start: str, end: str, url_filter: Optional[str] = None
+    ):
+        return self._run_report(
+            dimensions=["newVsReturning"],
+            metrics=[
+                "activeUsers",
+                "sessions",
+                "averageSessionDuration",
+                "conversions",
+            ],
+            start_date=start,
+            end_date=end,
+            url_filter=url_filter,
+        )
+
+    def locations_countries(
+        self, start: str, end: str, url_filter: Optional[str] = None
+    ):
+        return self._run_report(
+            dimensions=["country", "countryId"],
+            metrics=[
+                "activeUsers",
+                "sessions",
+                "conversions",
+                "bounceRate",
+                "averageSessionDuration",
+            ],
+            start_date=start,
+            end_date=end,
+            url_filter=url_filter,
+            limit=100,
+        )
+
+    def locations_cities(self, start: str, end: str, url_filter: Optional[str] = None):
+        return self._run_report(
+            dimensions=["city", "country"],
+            metrics=["activeUsers", "sessions"],
+            start_date=start,
+            end_date=end,
+            url_filter=url_filter,
+            limit=100,
+        )
+
     def realtime(self, url_filter: Optional[str] = None) -> Dict[str, Any]:
         from google.analytics.data_v1beta.types import (
             Dimension,

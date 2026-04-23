@@ -17,11 +17,14 @@ from starlette.middleware.cors import CORSMiddleware
 
 from services.clarity_service import ClarityService
 from services.demo_data import (
+    generate_audience,
     generate_clarity,
     generate_country_breakdown,
     generate_device_breakdown,
     generate_ga4_timeseries,
+    generate_locations,
     generate_realtime,
+    generate_sources_aggregate,
     generate_traffic_sources,
 )
 from services.ga4_service import GA4Service
@@ -705,6 +708,379 @@ async def analytics_summary_all(
         "totals": totals,
         "rows": rows,
         "landingPageCount": len(rows),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Routes - aggregate insights (sources / audience / locations)
+# ---------------------------------------------------------------------------
+async def _resolve_scope(
+    lp_id: Optional[str],
+) -> tuple[List[Dict[str, Any]], List[str], Optional[str]]:
+    """Return (lp_docs, lp_urls, ga_filter) for the requested scope.
+
+    When ``lp_id`` is None or ``"all"`` we include every LP.
+    The GA4 path filter is returned only when exactly one LP is targeted.
+    """
+    if lp_id and lp_id != "all":
+        lp = await _lp_by_id(lp_id)
+        return [lp], [lp["url"]], lp.get("ga_path_filter") or None
+    docs = await db.landing_pages.find({}, {"_id": 0}).to_list(500)
+    urls = [d["url"] for d in docs]
+    return docs, urls, None
+
+
+def _group_by_channel(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    buckets: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        ch = r.get("channel", "Other") or "Other"
+        b = buckets.setdefault(
+            ch,
+            {"channel": ch, "sessions": 0, "users": 0, "conversions": 0},
+        )
+        b["sessions"] += int(r.get("sessions", 0) or 0)
+        b["users"] += int(r.get("users", 0) or 0)
+        b["conversions"] += int(r.get("conversions", 0) or 0)
+    total = sum(b["sessions"] for b in buckets.values()) or 1
+    out = []
+    for b in buckets.values():
+        b["conversionRate"] = round(
+            b["conversions"] / b["sessions"] * 100 if b["sessions"] else 0.0, 2
+        )
+        b["share"] = round(b["sessions"] / total * 100, 1)
+        out.append(b)
+    out.sort(key=lambda r: r["sessions"], reverse=True)
+    return out
+
+
+@api.get("/analytics/sources")
+async def analytics_sources_aggregate(
+    lp_id: Optional[str] = Query(None),
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    lps, urls, ga_filter = await _resolve_scope(lp_id)
+    end = _parse_date(end_date or "today")
+    start = _parse_date(start_date or (end - timedelta(days=29)).isoformat())
+    service = await _get_ga4_service()
+    if service and (lp_id and lp_id != "all"):
+        # Live mode only supports a single-LP filter today.
+        try:
+            raw = service.sources_aggregate(
+                start.isoformat(), end.isoformat(), url_filter=ga_filter
+            )
+            rows = []
+            for r in raw.get("rows", []):
+                sessions = int(r.get("sessions", 0) or 0)
+                conv = int(r.get("conversions", 0) or 0)
+                new_users = int(r.get("newUsers", 0) or 0)
+                users = int(r.get("activeUsers", 0) or 0)
+                rows.append(
+                    {
+                        "channel": r.get("sessionDefaultChannelGroup", "Other"),
+                        "source": r.get("sessionSource", ""),
+                        "medium": r.get("sessionMedium", ""),
+                        "sessions": sessions,
+                        "users": users,
+                        "newUsers": new_users,
+                        "conversions": conv,
+                        "conversionRate": round(
+                            conv / sessions * 100 if sessions else 0.0, 2
+                        ),
+                        "bounceRate": round(
+                            float(r.get("bounceRate", 0) or 0) * 100, 2
+                        ),
+                        "avgSessionDuration": round(
+                            float(r.get("averageSessionDuration", 0) or 0), 2
+                        ),
+                    }
+                )
+            by_channel = _group_by_channel(rows)
+            trend_raw = service.sources_trend(
+                start.isoformat(), end.isoformat(), url_filter=ga_filter
+            )
+            trend_map: Dict[str, Dict[str, Any]] = {}
+            for r in trend_raw.get("rows", []):
+                raw_date = str(r.get("date", ""))
+                try:
+                    d = datetime.strptime(raw_date, "%Y%m%d").date().isoformat()
+                except ValueError:
+                    d = raw_date
+                bucket = trend_map.setdefault(d, {"date": d})
+                bucket[r.get("sessionDefaultChannelGroup", "Other")] = int(
+                    r.get("sessions", 0) or 0
+                )
+            trend = sorted(trend_map.values(), key=lambda x: x["date"])
+            totals = {
+                "sessions": sum(r["sessions"] for r in rows),
+                "users": sum(r["users"] for r in rows),
+                "conversions": sum(r["conversions"] for r in rows),
+                "conversionRate": round(
+                    sum(r["conversions"] for r in rows)
+                    / max(sum(r["sessions"] for r in rows), 1)
+                    * 100,
+                    2,
+                ),
+                "bounceRate": round(
+                    sum(r["bounceRate"] for r in rows) / max(len(rows), 1), 2
+                ),
+                "avgSessionDuration": round(
+                    sum(r["avgSessionDuration"] for r in rows) / max(len(rows), 1), 2
+                ),
+            }
+            return {
+                "scope": {"lpId": lp_id, "lpCount": len(lps)},
+                "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+                "totals": totals,
+                "byChannel": by_channel,
+                "bySource": rows,
+                "trend": trend,
+            }
+        except Exception as exc:
+            logger.warning("GA4 sources aggregate failed, fallback demo: %s", exc)
+    data = generate_sources_aggregate(urls, start, end)
+    return {
+        "scope": {"lpId": lp_id or "all", "lpCount": len(lps)},
+        "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+        **data,
+    }
+
+
+@api.get("/analytics/audience")
+async def analytics_audience(
+    lp_id: Optional[str] = Query(None),
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    lps, urls, ga_filter = await _resolve_scope(lp_id)
+    end = _parse_date(end_date or "today")
+    start = _parse_date(start_date or (end - timedelta(days=29)).isoformat())
+
+    demo = generate_audience(urls, start, end)
+    service = await _get_ga4_service()
+    if service and (lp_id and lp_id != "all"):
+        try:
+            dev_raw = service.audience_devices(
+                start.isoformat(), end.isoformat(), ga_filter
+            )
+            brw_raw = service.audience_browsers(
+                start.isoformat(), end.isoformat(), ga_filter
+            )
+            os_raw = service.audience_os(
+                start.isoformat(), end.isoformat(), ga_filter
+            )
+            lang_raw = service.audience_languages(
+                start.isoformat(), end.isoformat(), ga_filter
+            )
+            nvr_raw = service.audience_new_returning(
+                start.isoformat(), end.isoformat(), ga_filter
+            )
+
+            def _share(rows: List[Dict[str, Any]], key: str, name_field: str):
+                total = sum(int(r.get(key, 0) or 0) for r in rows) or 1
+                out = []
+                for r in rows:
+                    s = int(r.get(key, 0) or 0)
+                    out.append(
+                        {
+                            name_field: r.get(name_field, "") or r.get(
+                                name_field.lower(), ""
+                            ),
+                            "sessions": s,
+                            "share": round(s / total * 100, 1),
+                        }
+                    )
+                return out
+
+            devices = []
+            total_sessions = sum(
+                int(r.get("sessions", 0) or 0) for r in dev_raw.get("rows", [])
+            ) or 1
+            for r in dev_raw.get("rows", []):
+                s = int(r.get("sessions", 0) or 0)
+                devices.append(
+                    {
+                        "device": r.get("deviceCategory", "unknown"),
+                        "sessions": s,
+                        "share": round(s / total_sessions * 100, 1),
+                    }
+                )
+
+            browsers = []
+            total_b = sum(
+                int(r.get("sessions", 0) or 0) for r in brw_raw.get("rows", [])
+            ) or 1
+            for r in brw_raw.get("rows", []):
+                s = int(r.get("sessions", 0) or 0)
+                browsers.append(
+                    {
+                        "browser": r.get("browser", ""),
+                        "sessions": s,
+                        "share": round(s / total_b * 100, 1),
+                    }
+                )
+
+            operating_systems = []
+            total_o = sum(
+                int(r.get("sessions", 0) or 0) for r in os_raw.get("rows", [])
+            ) or 1
+            for r in os_raw.get("rows", []):
+                s = int(r.get("sessions", 0) or 0)
+                operating_systems.append(
+                    {
+                        "os": r.get("operatingSystem", ""),
+                        "sessions": s,
+                        "share": round(s / total_o * 100, 1),
+                    }
+                )
+
+            languages = []
+            total_l = sum(
+                int(r.get("sessions", 0) or 0) for r in lang_raw.get("rows", [])
+            ) or 1
+            for r in lang_raw.get("rows", []):
+                s = int(r.get("sessions", 0) or 0)
+                languages.append(
+                    {
+                        "language": r.get("language", ""),
+                        "sessions": s,
+                        "share": round(s / total_l * 100, 1),
+                    }
+                )
+
+            new_vs_returning = []
+            for r in nvr_raw.get("rows", []):
+                new_vs_returning.append(
+                    {
+                        "type": r.get("newVsReturning", ""),
+                        "users": int(r.get("activeUsers", 0) or 0),
+                        "sessions": int(r.get("sessions", 0) or 0),
+                        "avgDuration": round(
+                            float(r.get("averageSessionDuration", 0) or 0), 2
+                        ),
+                        "conversions": int(r.get("conversions", 0) or 0),
+                    }
+                )
+
+            total_users = sum(r["users"] for r in new_vs_returning) or demo["users"]["total"]
+            new_users = next(
+                (r["users"] for r in new_vs_returning if "new" in r["type"].lower()),
+                demo["users"]["new"],
+            )
+            returning = total_users - new_users
+
+            result = {
+                "scope": {"lpId": lp_id, "lpCount": len(lps)},
+                "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+                "users": {
+                    "total": total_users,
+                    "new": new_users,
+                    "returning": returning,
+                    "newShare": round(
+                        new_users / total_users * 100 if total_users else 0.0, 1
+                    ),
+                },
+                "sessions": sum(r["sessions"] for r in new_vs_returning)
+                or demo["sessions"],
+                "devices": devices or demo["devices"],
+                "browsers": browsers or demo["browsers"],
+                "operatingSystems": operating_systems or demo["operatingSystems"],
+                "languages": languages or demo["languages"],
+                "ageGender": demo["ageGender"],  # GA4 ceiling-restricted fields
+                "interests": demo["interests"],
+                "engagement": demo["engagement"],
+                "newVsReturning": new_vs_returning or demo["newVsReturning"],
+            }
+            return result
+        except Exception as exc:
+            logger.warning("GA4 audience failed, fallback demo: %s", exc)
+    return {
+        "scope": {"lpId": lp_id or "all", "lpCount": len(lps)},
+        "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+        **demo,
+    }
+
+
+@api.get("/analytics/locations")
+async def analytics_locations(
+    lp_id: Optional[str] = Query(None),
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    lps, urls, ga_filter = await _resolve_scope(lp_id)
+    end = _parse_date(end_date or "today")
+    start = _parse_date(start_date or (end - timedelta(days=29)).isoformat())
+    service = await _get_ga4_service()
+    if service and (lp_id and lp_id != "all"):
+        try:
+            c_raw = service.locations_countries(
+                start.isoformat(), end.isoformat(), ga_filter
+            )
+            ct_raw = service.locations_cities(
+                start.isoformat(), end.isoformat(), ga_filter
+            )
+            countries = []
+            for r in c_raw.get("rows", []):
+                sessions = int(r.get("sessions", 0) or 0)
+                conv = int(r.get("conversions", 0) or 0)
+                countries.append(
+                    {
+                        "country": r.get("country", ""),
+                        "countryCode": r.get("countryId", ""),
+                        "users": int(r.get("activeUsers", 0) or 0),
+                        "sessions": sessions,
+                        "conversions": conv,
+                        "conversionRate": round(
+                            conv / sessions * 100 if sessions else 0.0, 2
+                        ),
+                        "bounceRate": round(
+                            float(r.get("bounceRate", 0) or 0) * 100, 2
+                        ),
+                        "avgSessionDuration": round(
+                            float(r.get("averageSessionDuration", 0) or 0), 2
+                        ),
+                    }
+                )
+            cities = []
+            for r in ct_raw.get("rows", []):
+                cities.append(
+                    {
+                        "city": r.get("city", ""),
+                        "country": r.get("country", ""),
+                        "countryCode": "",
+                        "users": int(r.get("activeUsers", 0) or 0),
+                        "sessions": int(r.get("sessions", 0) or 0),
+                    }
+                )
+            countries.sort(key=lambda r: r["users"], reverse=True)
+            cities.sort(key=lambda r: r["sessions"], reverse=True)
+            totals = {
+                "countries": len(countries),
+                "cities": len(cities),
+                "sessions": sum(c["sessions"] for c in countries),
+                "users": sum(c["users"] for c in countries),
+                "conversions": sum(c["conversions"] for c in countries),
+            }
+            totals["conversionRate"] = round(
+                totals["conversions"] / totals["sessions"] * 100
+                if totals["sessions"]
+                else 0.0,
+                2,
+            )
+            return {
+                "scope": {"lpId": lp_id, "lpCount": len(lps)},
+                "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+                "totals": totals,
+                "countries": countries,
+                "cities": cities[:40],
+            }
+        except Exception as exc:
+            logger.warning("GA4 locations failed, fallback demo: %s", exc)
+    data = generate_locations(urls, start, end)
+    return {
+        "scope": {"lpId": lp_id or "all", "lpCount": len(lps)},
+        "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+        **data,
     }
 
 
