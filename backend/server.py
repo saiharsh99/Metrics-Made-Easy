@@ -967,7 +967,7 @@ async def analytics_audience(
                 (r["users"] for r in new_vs_returning if "new" in r["type"].lower()),
                 demo["users"]["new"],
             )
-            returning = total_users - new_users
+            returning = max(0, total_users - new_users)
 
             result = {
                 "scope": {"lpId": lp_id, "lpCount": len(lps)},
@@ -1047,7 +1047,6 @@ async def analytics_locations(
                     {
                         "city": r.get("city", ""),
                         "country": r.get("country", ""),
-                        "countryCode": "",
                         "users": int(r.get("activeUsers", 0) or 0),
                         "sessions": int(r.get("sessions", 0) or 0),
                     }

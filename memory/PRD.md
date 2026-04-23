@@ -21,12 +21,23 @@
 5. Credentials management UI with clear instructions (no CLI required).
 6. Monochrome Swiss dashboard feel, Chivo display + IBM Plex body.
 
-## What's been implemented — 2026-02 (v1 MVP)
+## What's been implemented
+
+### 2026-02 — v1 MVP
 - Backend: full CRUD for landing pages; credentials store + status; analytics endpoints `/summary`, `/overview`, `/ga4/traffic-sources`, `/ga4/devices`, `/ga4/countries`, `/realtime`, `/clarity`, `/compare`. 3 LPs auto-seeded on first boot.
 - Frontend pages: Dashboard, Landing Pages (list + create dialog + delete), Landing Page Detail (8 KPI cards + traffic area chart + realtime panel + conversions/bounce line + device donut + tabs for Sources, Frustration, Sessions, Geography), Compare (dual date range + overlay chart + delta KPIs), Settings (GA4 + Clarity connect cards with step-by-step instructions).
 - Demo-mode works out-of-the-box; connection badges in header show GA4/Clarity state.
 - `data-testid` on every interactive / informational element.
 - Testing: 19/19 backend pytest tests pass, full frontend flow validated (100% success on both).
+
+### 2026-02 — v1.1 (insights dashboards)
+- Backend: 3 new aggregate endpoints `GET /api/analytics/sources`, `/audience`, `/locations`. Each accepts optional `lp_id` (omitted / `"all"` → aggregate across every LP, concrete id → scoped + GA4 path filter). GA4 live paths added in `ga4_service.py` (sources_aggregate, sources_trend, audience_devices/browsers/os/languages/new_returning, locations_countries/cities).
+- Demo generators for the 3 endpoints deterministic per `(scope, start, end)` with 8-channel mix, 30-day trend, device/browser/OS/language splits, age/gender, affinity interests, new vs returning, and country + city breakdown with flag-friendly country codes.
+- Frontend nav: added Sources / Audience / Locations routes. Shared `InsightsFilters` component (LP dropdown incl. "All landing pages" + date range).
+- Sources page: 4 total cards, channel-mix rail, top-5-channels daily trend, searchable source/medium table with conversion-rate highlight.
+- Audience page: user totals, device donut, browser / OS bar lists, age × gender stacked bar, interests progress bars, new vs returning comparison cards, languages bar list.
+- Locations page: totals (countries / cities / sessions / conversions), countries table with flag emojis + bounce / CR / share, top cities list, auto-insight cards (most users / best CR / lowest bounce).
+- Testing: 31/31 backend pytest tests pass (12 new for insights endpoints), all new frontend pages validated (100%/100% overall).
 
 ## P0 / P1 / P2 backlog
 **P0 (blocking for real usage)** — none; app is fully functional in demo mode and live-ready once credentials are added.
