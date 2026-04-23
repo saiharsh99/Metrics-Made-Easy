@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, formatNumber } from "@/lib/api";
-import InsightsFilters from "@/components/InsightsFilters";
+import { useApp } from "@/lib/app-context";
 import { Badge } from "@/components/ui/badge";
 import {
   Bar,
@@ -16,12 +16,7 @@ import {
   YAxis,
 } from "recharts";
 import { format, subDays } from "date-fns";
-import { UsersThree, Clock, ChartBar, Smiley } from "@phosphor-icons/react";
-
-const defaultRange = () => ({
-  from: format(subDays(new Date(), 29), "yyyy-MM-dd"),
-  to: format(new Date(), "yyyy-MM-dd"),
-});
+import { UsersThree, Clock, ChartBar, Smiley, LockKey } from "@phosphor-icons/react";
 
 const DEVICE_COLORS = ["#09090b", "#52525b", "#a1a1aa"];
 const BROWSER_COLORS = [
@@ -35,15 +30,9 @@ const BROWSER_COLORS = [
 ];
 
 export default function Audience() {
-  const [pages, setPages] = useState([]);
-  const [lpId, setLpId] = useState("all");
-  const [range, setRange] = useState(defaultRange());
+  const { lpId, range, refreshToken } = useApp();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get("/landing-pages").then((r) => setPages(r.data));
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -61,7 +50,7 @@ export default function Audience() {
     return () => {
       mounted = false;
     };
-  }, [lpId, range.from, range.to]);
+  }, [lpId, range.from, range.to, refreshToken]);
 
   return (
     <div className="space-y-8" data-testid="audience-page">
@@ -78,13 +67,14 @@ export default function Audience() {
         </p>
       </div>
 
-      <InsightsFilters
-        pages={pages}
-        lpId={lpId}
-        onLpChange={setLpId}
-        range={range}
-        onRangeChange={setRange}
-      />
+      {data?.note && (
+        <div
+          className="p-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md"
+          data-testid="audience-note"
+        >
+          {data.note}
+        </div>
+      )}
 
       {loading && !data && (
         <div className="p-12 text-center text-zinc-500" data-testid="audience-loading">
@@ -207,44 +197,55 @@ export default function Audience() {
               subtitle="User distribution"
               testId="age-gender-card"
             >
-              <div className="h-[260px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={data.ageGender}
-                    margin={{ top: 8, right: 8, bottom: 0, left: -20 }}
-                  >
-                    <CartesianGrid strokeDasharray="2 4" vertical={false} />
-                    <XAxis
-                      dataKey="ageRange"
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tickFormatter={(v) => formatNumber(v)}
-                    />
-                    <Tooltip formatter={(v) => formatNumber(v)} />
-                    <Legend
-                      iconType="square"
-                      iconSize={8}
-                      wrapperStyle={{ fontSize: 11 }}
-                    />
-                    <Bar
-                      dataKey="male"
-                      stackId="a"
-                      fill="#2563eb"
-                      name="Male"
-                    />
-                    <Bar
-                      dataKey="female"
-                      stackId="a"
-                      fill="#db2777"
-                      name="Female"
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {data.ageGender && data.ageGender.length > 0 ? (
+                <div className="h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={data.ageGender}
+                      margin={{ top: 8, right: 8, bottom: 0, left: -20 }}
+                    >
+                      <CartesianGrid strokeDasharray="2 4" vertical={false} />
+                      <XAxis
+                        dataKey="ageRange"
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v) => formatNumber(v)}
+                      />
+                      <Tooltip formatter={(v) => formatNumber(v)} />
+                      <Legend
+                        iconType="square"
+                        iconSize={8}
+                        wrapperStyle={{ fontSize: 11 }}
+                      />
+                      <Bar
+                        dataKey="male"
+                        stackId="a"
+                        fill="#2563eb"
+                        name="Male"
+                      />
+                      <Bar
+                        dataKey="female"
+                        stackId="a"
+                        fill="#db2777"
+                        name="Female"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <LockedSection
+                  title="Demographics are locked"
+                  message={
+                    data?.notes?.ageGender ||
+                    "Enable GA4 Advertising Features on the property to unlock age & gender."
+                  }
+                  testId="age-gender-locked"
+                />
+              )}
             </ChartCard>
 
             <ChartCard
@@ -252,32 +253,43 @@ export default function Audience() {
               subtitle="Top affinity segments"
               testId="interests-card"
             >
-              <div className="space-y-2">
-                {data.interests.slice(0, 8).map((i) => (
-                  <div
-                    key={i.interest}
-                    className="flex items-center gap-3"
-                    data-testid={`interest-${i.interest}`}
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between text-xs mb-1">
-                        <span className="text-zinc-950 font-medium truncate">
-                          {i.interest}
-                        </span>
-                        <span className="mono-font text-zinc-500">
-                          {formatNumber(i.users)} · {i.share}%
-                        </span>
-                      </div>
-                      <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-zinc-950"
-                          style={{ width: `${Math.min(i.share * 4, 100)}%` }}
-                        />
+              {data.interests && data.interests.length > 0 ? (
+                <div className="space-y-2">
+                  {data.interests.slice(0, 8).map((i) => (
+                    <div
+                      key={i.interest}
+                      className="flex items-center gap-3"
+                      data-testid={`interest-${i.interest}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="text-zinc-950 font-medium truncate">
+                            {i.interest}
+                          </span>
+                          <span className="mono-font text-zinc-500">
+                            {formatNumber(i.users)} · {i.share}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 bg-zinc-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-zinc-950"
+                            style={{ width: `${Math.min(i.share * 4, 100)}%` }}
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <LockedSection
+                  title="Interests are locked"
+                  message={
+                    data?.notes?.interests ||
+                    "Enable GA4 Advertising Features on the property to unlock affinity interests."
+                  }
+                  testId="interests-locked"
+                />
+              )}
             </ChartCard>
           </section>
 
@@ -425,6 +437,33 @@ function Kv({ label, value, highlight }) {
       >
         {value}
       </div>
+    </div>
+  );
+}
+
+function LockedSection({ title, message, testId }) {
+  return (
+    <div
+      className="flex flex-col items-center justify-center h-[220px] text-center px-6"
+      data-testid={testId}
+    >
+      <div className="w-10 h-10 rounded-full bg-zinc-100 flex items-center justify-center mb-3">
+        <LockKey size={18} weight="duotone" className="text-zinc-500" />
+      </div>
+      <div className="display-font font-bold text-sm text-zinc-950 mb-1">
+        {title}
+      </div>
+      <p className="text-xs text-zinc-500 max-w-xs leading-relaxed">
+        {message}
+      </p>
+      <a
+        href="https://support.google.com/analytics/answer/9268042"
+        target="_blank"
+        rel="noreferrer"
+        className="text-[11px] text-blue-700 underline mt-2"
+      >
+        How to enable this in GA4 →
+      </a>
     </div>
   );
 }

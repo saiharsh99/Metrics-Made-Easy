@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, formatNumber } from "@/lib/api";
-import InsightsFilters from "@/components/InsightsFilters";
+import { useApp } from "@/lib/app-context";
 import { FrustrationBars } from "@/components/Charts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { format, formatDistanceToNow, parseISO, subDays } from "date-fns";
+import { formatDistanceToNow, parseISO } from "date-fns";
 import {
   HandTap,
   Cursor,
@@ -33,24 +33,13 @@ import {
   Lightning,
 } from "@phosphor-icons/react";
 
-const defaultRange = () => ({
-  from: format(subDays(new Date(), 2), "yyyy-MM-dd"),
-  to: format(new Date(), "yyyy-MM-dd"),
-});
-
 export default function Clarity() {
-  const [pages, setPages] = useState([]);
-  const [lpId, setLpId] = useState("all");
-  const [range, setRange] = useState(defaultRange());
+  const { lpId, pages, refreshToken } = useApp();
   const [days, setDays] = useState(3);
   const [data, setData] = useState(null); // per-LP clarity result
   const [perLp, setPerLp] = useState([]); // when lpId==="all"
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // recordings filter
-
-  useEffect(() => {
-    api.get("/landing-pages").then((r) => setPages(r.data));
-  }, []);
 
   // Fetch clarity data
   useEffect(() => {
@@ -58,17 +47,15 @@ export default function Clarity() {
     setLoading(true);
     if (lpId === "all") {
       // Aggregate: fetch every LP in parallel
-      api
-        .get("/landing-pages")
-        .then(async (r) => {
-          const all = await Promise.all(
-            r.data.map((p) =>
-              api
-                .get("/analytics/clarity", { params: { lp_id: p.id, days } })
-                .then((res) => ({ lp: p, clarity: res.data }))
-                .catch(() => ({ lp: p, clarity: null }))
-            )
-          );
+      Promise.all(
+        pages.map((p) =>
+          api
+            .get("/analytics/clarity", { params: { lp_id: p.id, days } })
+            .then((res) => ({ lp: p, clarity: res.data }))
+            .catch(() => ({ lp: p, clarity: null }))
+        )
+      )
+        .then((all) => {
           if (!mounted) return;
           setPerLp(all);
           setData(null);
@@ -87,7 +74,7 @@ export default function Clarity() {
     return () => {
       mounted = false;
     };
-  }, [lpId, days, range.from, range.to]);
+  }, [lpId, days, pages, refreshToken]);
 
   const aggregate = useMemo(() => {
     if (lpId !== "all") return null;
@@ -207,14 +194,6 @@ export default function Clarity() {
           </div>
         </div>
       </div>
-
-      <InsightsFilters
-        pages={pages}
-        lpId={lpId}
-        onLpChange={setLpId}
-        range={range}
-        onRangeChange={setRange}
-      />
 
       {loading && !summary && (
         <div className="p-12 text-center text-zinc-500" data-testid="clarity-loading">

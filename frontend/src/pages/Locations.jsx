@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, formatNumber } from "@/lib/api";
-import InsightsFilters from "@/components/InsightsFilters";
+import { useApp } from "@/lib/app-context";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { format, subDays } from "date-fns";
@@ -11,11 +11,6 @@ import {
   MagnifyingGlass,
 } from "@phosphor-icons/react";
 
-const defaultRange = () => ({
-  from: format(subDays(new Date(), 29), "yyyy-MM-dd"),
-  to: format(new Date(), "yyyy-MM-dd"),
-});
-
 const FLAG_OFFSET = 127397; // regional indicator offset
 const flagForCode = (code) => {
   if (!code || code.length !== 2) return "";
@@ -25,16 +20,10 @@ const flagForCode = (code) => {
 };
 
 export default function Locations() {
-  const [pages, setPages] = useState([]);
-  const [lpId, setLpId] = useState("all");
-  const [range, setRange] = useState(defaultRange());
+  const { lpId, range, refreshToken } = useApp();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    api.get("/landing-pages").then((r) => setPages(r.data));
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -52,13 +41,13 @@ export default function Locations() {
     return () => {
       mounted = false;
     };
-  }, [lpId, range.from, range.to]);
+  }, [lpId, range.from, range.to, refreshToken]);
 
   const filteredCountries = useMemo(() => {
     if (!data) return [];
     const q = search.toLowerCase();
     return data.countries.filter((c) =>
-      !q || c.country.toLowerCase().includes(q) || c.countryCode.toLowerCase().includes(q)
+      !q || c.country.toLowerCase().includes(q) || (c.countryCode || "").toLowerCase().includes(q)
     );
   }, [data, search]);
 
@@ -79,13 +68,14 @@ export default function Locations() {
         </p>
       </div>
 
-      <InsightsFilters
-        pages={pages}
-        lpId={lpId}
-        onLpChange={setLpId}
-        range={range}
-        onRangeChange={setRange}
-      />
+      {data?.note && (
+        <div
+          className="p-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md"
+          data-testid="locations-note"
+        >
+          {data.note}
+        </div>
+      )}
 
       {loading && !data && (
         <div className="p-12 text-center text-zinc-500" data-testid="locations-loading">

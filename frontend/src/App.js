@@ -11,25 +11,28 @@ import Sources from "@/pages/Sources";
 import Audience from "@/pages/Audience";
 import Locations from "@/pages/Locations";
 import Clarity from "@/pages/Clarity";
+import { AppProvider } from "@/lib/app-context";
 
 function App() {
   return (
     <div className="App min-h-screen bg-zinc-50 text-zinc-950" data-testid="app-root">
       <BrowserRouter>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/landing-pages" element={<LandingPages />} />
-            <Route path="/landing-pages/:id" element={<LandingPageDetail />} />
-            <Route path="/sources" element={<Sources />} />
-            <Route path="/audience" element={<Audience />} />
-            <Route path="/locations" element={<Locations />} />
-            <Route path="/clarity" element={<Clarity />} />
-            <Route path="/compare" element={<Compare />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </Layout>
+        <AppProvider>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/landing-pages" element={<LandingPages />} />
+              <Route path="/landing-pages/:id" element={<LandingPageDetail />} />
+              <Route path="/sources" element={<Sources />} />
+              <Route path="/audience" element={<Audience />} />
+              <Route path="/locations" element={<Locations />} />
+              <Route path="/clarity" element={<Clarity />} />
+              <Route path="/compare" element={<Compare />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Layout>
+        </AppProvider>
       </BrowserRouter>
       <Toaster richColors position="top-right" />
     </div>

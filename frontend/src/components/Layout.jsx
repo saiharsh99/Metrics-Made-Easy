@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
+import GlobalToolbar from "@/components/GlobalToolbar";
 
 const NAV = [
   { to: "/", label: "Overview", icon: ChartLineUp, testId: "nav-overview" },
@@ -92,6 +93,7 @@ export default function Layout({ children }) {
           </div>
         </div>
       </header>
+      <GlobalToolbar />
       <main className="max-w-[1600px] mx-auto px-4 md:px-8 lg:px-12 py-8 md:py-10" data-testid="main-content">
         {children}
       </main>

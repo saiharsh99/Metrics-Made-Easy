@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, formatNumber, formatSignedPercent } from "@/lib/api";
-import InsightsFilters from "@/components/InsightsFilters";
+import { useApp } from "@/lib/app-context";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,11 +19,6 @@ import {
 import { format, parseISO, subDays } from "date-fns";
 import { MagnifyingGlass, TrendUp, Funnel } from "@phosphor-icons/react";
 
-const defaultRange = () => ({
-  from: format(subDays(new Date(), 29), "yyyy-MM-dd"),
-  to: format(new Date(), "yyyy-MM-dd"),
-});
-
 const CHANNEL_COLORS = {
   "Organic Search": "#2563eb",
   Direct: "#09090b",
@@ -37,16 +32,10 @@ const CHANNEL_COLORS = {
 };
 
 export default function Sources() {
-  const [pages, setPages] = useState([]);
-  const [lpId, setLpId] = useState("all");
-  const [range, setRange] = useState(defaultRange());
+  const { lpId, range, refreshToken } = useApp();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    api.get("/landing-pages").then((r) => setPages(r.data));
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -64,7 +53,7 @@ export default function Sources() {
     return () => {
       mounted = false;
     };
-  }, [lpId, range.from, range.to]);
+  }, [lpId, range.from, range.to, refreshToken]);
 
   const filteredRows = useMemo(() => {
     if (!data) return [];
@@ -98,13 +87,14 @@ export default function Sources() {
         </p>
       </div>
 
-      <InsightsFilters
-        pages={pages}
-        lpId={lpId}
-        onLpChange={setLpId}
-        range={range}
-        onRangeChange={setRange}
-      />
+      {data?.note && (
+        <div
+          className="p-4 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-md"
+          data-testid="sources-note"
+        >
+          {data.note}
+        </div>
+      )}
 
       {loading && !data && (
         <div className="p-12 text-center text-zinc-500" data-testid="sources-loading">

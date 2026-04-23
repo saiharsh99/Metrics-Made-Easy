@@ -347,6 +347,14 @@ async def delete_credentials(provider: Literal["ga4", "clarity"]):
     return await credentials_status()
 
 
+@api.post("/cache/clear")
+async def clear_cache() -> Dict[str, Any]:
+    """Drop any in-process caches so the next request re-fetches live."""
+    before = len(clarity_cache)
+    clarity_cache.clear()
+    return {"cleared": True, "clarityEntriesCleared": before}
+
+
 # ---------------------------------------------------------------------------
 # Routes - landing pages
 # ---------------------------------------------------------------------------
@@ -1166,15 +1174,30 @@ async def analytics_audience(
                     ),
                 },
                 "sessions": sum(r["sessions"] for r in new_vs_returning)
-                or demo["sessions"],
-                "devices": devices or demo["devices"],
-                "browsers": browsers or demo["browsers"],
-                "operatingSystems": operating_systems or demo["operatingSystems"],
-                "languages": languages or demo["languages"],
-                "ageGender": demo["ageGender"],  # GA4 ceiling-restricted fields
-                "interests": demo["interests"],
-                "engagement": demo["engagement"],
-                "newVsReturning": new_vs_returning or demo["newVsReturning"],
+                or 0,
+                "devices": devices,
+                "browsers": browsers,
+                "operatingSystems": operating_systems,
+                "languages": languages,
+                "ageGender": [],
+                "interests": [],
+                "ageGenderAvailable": False,
+                "interestsAvailable": False,
+                "notes": {
+                    "ageGender": "Age/gender requires GA4 Advertising Features to be enabled on the property.",
+                    "interests": "Affinity interests require GA4 Advertising Features to be enabled on the property.",
+                },
+                "engagement": {
+                    "avgSessionDuration": round(
+                        sum(r["avgDuration"] * r["sessions"] for r in new_vs_returning)
+                        / max(sum(r["sessions"] for r in new_vs_returning), 1),
+                        2,
+                    ),
+                    "avgPagesPerSession": 0.0,
+                    "engagementRate": 0.0,
+                    "bounceRate": 0.0,
+                },
+                "newVsReturning": new_vs_returning,
             }
             return result
         except Exception as exc:

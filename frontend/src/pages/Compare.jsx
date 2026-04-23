@@ -68,8 +68,6 @@ export default function Compare() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lpId, rangeA.from, rangeA.to, rangeB.from, rangeB.to]);
 
-  const merged = mergeSeries(result?.a?.series, result?.b?.series);
-
   return (
     <div className="space-y-8" data-testid="compare-page">
       <div>
@@ -140,33 +138,129 @@ export default function Compare() {
             />
           </section>
 
-          <section className="bg-white border border-zinc-200 rounded-lg p-6" data-testid="compare-chart-card">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.22em] font-semibold text-zinc-500 mb-1">
-                  Overlay
-                </div>
-                <h2 className="display-font font-bold text-xl tracking-tight">
-                  Sessions by day
-                </h2>
+          <section
+            className="bg-white border border-zinc-200 rounded-lg p-6"
+            data-testid="compare-chart-card"
+          >
+            <div className="mb-4">
+              <div className="text-[10px] uppercase tracking-[0.22em] font-semibold text-zinc-500 mb-1">
+                Sessions by day
               </div>
-              <div className="flex gap-4 text-xs">
-                <LegendDot color="#09090b" label={result.a.label} />
-                <LegendDot color="#2563eb" label={result.b.label} />
+              <h2 className="display-font font-bold text-xl tracking-tight">
+                Period A vs Period B
+              </h2>
+            </div>
+
+            <div className="mb-6" data-testid="compare-period-a">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-zinc-950" />
+                  <span className="text-[10px] uppercase tracking-[0.22em] font-bold text-zinc-900">
+                    Period A
+                  </span>
+                  <span className="mono-font text-xs text-zinc-500">
+                    {result.a.label}
+                  </span>
+                </div>
+                <div className="text-xs text-zinc-600">
+                  Total sessions:{" "}
+                  <span className="mono-font font-semibold text-zinc-950">
+                    {formatNumber(result.a.summary.sessions)}
+                  </span>
+                </div>
+              </div>
+              <div className="h-[180px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={(result.a.series || []).map((d) => ({
+                      ...d,
+                      label: d.date ? format(parseISO(d.date), "MMM d") : "",
+                    }))}
+                    margin={{ top: 8, right: 8, bottom: 0, left: -20 }}
+                  >
+                    <CartesianGrid strokeDasharray="2 4" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#09090b", fontWeight: 600 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => formatNumber(v)}
+                    />
+                    <Tooltip
+                      formatter={(v) => [formatNumber(v), "Sessions"]}
+                      labelFormatter={(l) => `Period A · ${l}`}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="sessions"
+                      stroke="#09090b"
+                      strokeWidth={2.5}
+                      dot={false}
+                      name="Period A"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
             </div>
-            <div className="h-[320px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={merged} margin={{ top: 8, right: 8, bottom: 0, left: -20 }}>
-                  <CartesianGrid strokeDasharray="2 4" vertical={false} />
-                  <XAxis dataKey="x" axisLine={false} tickLine={false} />
-                  <YAxis axisLine={false} tickLine={false} tickFormatter={(v) => formatNumber(v)} />
-                  <Tooltip formatter={(v) => formatNumber(v)} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Line type="monotone" dataKey="a" stroke="#09090b" strokeWidth={2} dot={false} name="Period A" />
-                  <Line type="monotone" dataKey="b" stroke="#2563eb" strokeWidth={2} dot={false} name="Period B" />
-                </LineChart>
-              </ResponsiveContainer>
+
+            <div data-testid="compare-period-b">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                  <span className="text-[10px] uppercase tracking-[0.22em] font-bold text-blue-700">
+                    Period B
+                  </span>
+                  <span className="mono-font text-xs text-blue-600/80">
+                    {result.b.label}
+                  </span>
+                </div>
+                <div className="text-xs text-zinc-600">
+                  Total sessions:{" "}
+                  <span className="mono-font font-semibold text-blue-700">
+                    {formatNumber(result.b.summary.sessions)}
+                  </span>
+                </div>
+              </div>
+              <div className="h-[180px] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={(result.b.series || []).map((d) => ({
+                      ...d,
+                      label: d.date ? format(parseISO(d.date), "MMM d") : "",
+                    }))}
+                    margin={{ top: 8, right: 8, bottom: 0, left: -20 }}
+                  >
+                    <CartesianGrid strokeDasharray="2 4" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fill: "#2563eb", fontWeight: 600 }}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v) => formatNumber(v)}
+                    />
+                    <Tooltip
+                      formatter={(v) => [formatNumber(v), "Sessions"]}
+                      labelFormatter={(l) => `Period B · ${l}`}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="sessions"
+                      stroke="#2563eb"
+                      strokeWidth={2.5}
+                      dot={false}
+                      name="Period B"
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </section>
         </>
@@ -203,17 +297,4 @@ function CompareKpi({ label, a, b, delta, raw }) {
       </div>
     </div>
   );
-}
-
-function mergeSeries(a, b) {
-  const result = [];
-  const len = Math.max(a?.length || 0, b?.length || 0);
-  for (let i = 0; i < len; i++) {
-    result.push({
-      x: `Day ${i + 1}`,
-      a: a?.[i]?.sessions ?? null,
-      b: b?.[i]?.sessions ?? null,
-    });
-  }
-  return result;
 }

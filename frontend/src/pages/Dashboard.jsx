@@ -68,7 +68,6 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <DateRangePicker value={range} onChange={setRange} />
           <Button
             asChild
             className="bg-zinc-950 hover:bg-zinc-800 text-white rounded-md"
