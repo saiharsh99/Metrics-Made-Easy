@@ -11,6 +11,7 @@ import {
   WarningCircle,
   Stack,
   TrendUp,
+  Plus,
 } from "@phosphor-icons/react";
 import { subDays, format } from "date-fns";
 
@@ -215,8 +216,23 @@ export default function Dashboard() {
                 ))}
               {!loading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-6 py-10 text-center text-zinc-500" data-testid="lp-table-empty">
-                    No landing pages yet. <Link to="/landing-pages" className="underline">Add one</Link> to begin.
+                  <td colSpan={9} className="px-6 py-16 text-center" data-testid="lp-table-empty">
+                    <div className="display-font font-bold text-xl mb-2 text-zinc-950">
+                      No landing pages yet
+                    </div>
+                    <p className="text-sm text-zinc-500 mb-5 max-w-md mx-auto">
+                      Add your first real landing page — Lens will pull live GA4 +
+                      Clarity data scoped to its URL path.
+                    </p>
+                    <Button
+                      asChild
+                      className="bg-zinc-950 hover:bg-zinc-800 text-white"
+                      data-testid="empty-state-add-lp"
+                    >
+                      <Link to="/landing-pages">
+                        <Plus size={14} weight="bold" className="mr-2" /> Add a landing page
+                      </Link>
+                    </Button>
                   </td>
                 </tr>
               )}

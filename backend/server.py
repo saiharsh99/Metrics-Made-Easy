@@ -463,7 +463,8 @@ async def _ga4_timeseries_for(
             series = _map_ga4_timeseries(raw)
             return {"series": series, "summary": _summarise_timeseries(series)}
         except Exception as exc:
-            logger.warning("GA4 timeseries failed, fallback to demo: %s", exc)
+            logger.warning("GA4 timeseries failed: %s", exc)
+            return {"series": [], "summary": _summarise_timeseries([])}
     return generate_ga4_timeseries(lp["url"], start, end)
 
 
@@ -499,7 +500,21 @@ async def _clarity_for(lp: Dict[str, Any], days: int) -> Dict[str, Any]:
             clarity_cache[cache_key] = result
             return result
         except Exception as exc:
-            logger.warning("Clarity fetch failed, fallback to demo: %s", exc)
+            logger.warning("Clarity fetch failed: %s", exc)
+            empty = {
+                "summary": {
+                    "sessions": 0,
+                    "rageClicks": 0,
+                    "deadClicks": 0,
+                    "quickBacks": 0,
+                    "excessiveScroll": 0,
+                    "avgScrollDepth": 0.0,
+                    "avgEngagementTime": 0.0,
+                },
+                "hotspots": [],
+                "recordings": [],
+            }
+            return empty
     return generate_clarity(lp["url"], days)
 
 
@@ -662,7 +677,8 @@ async def analytics_sources(
                 )
             return {"rows": rows}
         except Exception as exc:
-            logger.warning("GA4 sources failed, fallback to demo: %s", exc)
+            logger.warning("GA4 sources failed: %s", exc)
+            return {"rows": []}
     return {"rows": generate_traffic_sources(lp["url"])}
 
 
@@ -692,7 +708,8 @@ async def analytics_devices(lp_id: str):
                 )
             return {"rows": rows}
         except Exception as exc:
-            logger.warning("GA4 devices failed, fallback to demo: %s", exc)
+            logger.warning("GA4 devices failed: %s", exc)
+            return {"rows": []}
     return {"rows": generate_device_breakdown(lp["url"])}
 
 
@@ -720,7 +737,8 @@ async def analytics_countries(lp_id: str):
                 )
             return {"rows": rows}
         except Exception as exc:
-            logger.warning("GA4 countries failed, fallback to demo: %s", exc)
+            logger.warning("GA4 countries failed: %s", exc)
+            return {"rows": []}
     return {"rows": generate_country_breakdown(lp["url"])}
 
 
@@ -739,12 +757,10 @@ async def analytics_realtime(lp_id: str):
                 }
                 for r in raw.get("rows", [])
             ]
-            base = generate_realtime(lp["url"])
-            base["activeUsers"] = total
-            base["byCountry"] = by_country
-            return base
+            return {"activeUsers": total, "byCountry": by_country, "perMinute": []}
         except Exception as exc:
-            logger.warning("GA4 realtime failed, fallback to demo: %s", exc)
+            logger.warning("GA4 realtime failed: %s", exc)
+            return {"activeUsers": 0, "byCountry": [], "perMinute": []}
     return generate_realtime(lp["url"])
 
 
@@ -967,7 +983,41 @@ async def analytics_sources_aggregate(
                 "trend": trend,
             }
         except Exception as exc:
-            logger.warning("GA4 sources aggregate failed, fallback demo: %s", exc)
+            logger.warning("GA4 sources aggregate failed: %s", exc)
+            return {
+                "scope": {"lpId": lp_id, "lpCount": len(lps)},
+                "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+                "totals": {
+                    "sessions": 0,
+                    "users": 0,
+                    "conversions": 0,
+                    "conversionRate": 0.0,
+                    "bounceRate": 0.0,
+                    "avgSessionDuration": 0.0,
+                },
+                "byChannel": [],
+                "bySource": [],
+                "trend": [],
+            }
+    if service:
+        # Live GA4 connected but aggregate-mode requested across all LPs is
+        # not yet supported in live mode — fall back to per-LP loop later.
+        return {
+            "scope": {"lpId": lp_id or "all", "lpCount": len(lps)},
+            "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+            "totals": {
+                "sessions": 0,
+                "users": 0,
+                "conversions": 0,
+                "conversionRate": 0.0,
+                "bounceRate": 0.0,
+                "avgSessionDuration": 0.0,
+            },
+            "byChannel": [],
+            "bySource": [],
+            "trend": [],
+            "note": "Aggregate live mode across multiple LPs is coming soon. Pick a single LP to see live data.",
+        }
     data = generate_sources_aggregate(urls, start, end)
     return {
         "scope": {"lpId": lp_id or "all", "lpCount": len(lps)},
@@ -1123,7 +1173,47 @@ async def analytics_audience(
             }
             return result
         except Exception as exc:
-            logger.warning("GA4 audience failed, fallback demo: %s", exc)
+            logger.warning("GA4 audience failed: %s", exc)
+            return {
+                "scope": {"lpId": lp_id, "lpCount": len(lps)},
+                "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+                "users": {"total": 0, "new": 0, "returning": 0, "newShare": 0.0},
+                "sessions": 0,
+                "devices": [],
+                "browsers": [],
+                "operatingSystems": [],
+                "languages": [],
+                "ageGender": [],
+                "interests": [],
+                "engagement": {
+                    "avgSessionDuration": 0.0,
+                    "avgPagesPerSession": 0.0,
+                    "engagementRate": 0.0,
+                    "bounceRate": 0.0,
+                },
+                "newVsReturning": [],
+            }
+    if service:
+        return {
+            "scope": {"lpId": lp_id or "all", "lpCount": len(lps)},
+            "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+            "users": {"total": 0, "new": 0, "returning": 0, "newShare": 0.0},
+            "sessions": 0,
+            "devices": [],
+            "browsers": [],
+            "operatingSystems": [],
+            "languages": [],
+            "ageGender": [],
+            "interests": [],
+            "engagement": {
+                "avgSessionDuration": 0.0,
+                "avgPagesPerSession": 0.0,
+                "engagementRate": 0.0,
+                "bounceRate": 0.0,
+            },
+            "newVsReturning": [],
+            "note": "Aggregate live mode across multiple LPs is coming soon. Pick a single LP to see live data.",
+        }
     return {
         "scope": {"lpId": lp_id or "all", "lpCount": len(lps)},
         "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
@@ -1204,7 +1294,37 @@ async def analytics_locations(
                 "cities": cities[:40],
             }
         except Exception as exc:
-            logger.warning("GA4 locations failed, fallback demo: %s", exc)
+            logger.warning("GA4 locations failed: %s", exc)
+            return {
+                "scope": {"lpId": lp_id, "lpCount": len(lps)},
+                "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+                "totals": {
+                    "countries": 0,
+                    "cities": 0,
+                    "sessions": 0,
+                    "users": 0,
+                    "conversions": 0,
+                    "conversionRate": 0.0,
+                },
+                "countries": [],
+                "cities": [],
+            }
+    if service:
+        return {
+            "scope": {"lpId": lp_id or "all", "lpCount": len(lps)},
+            "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+            "totals": {
+                "countries": 0,
+                "cities": 0,
+                "sessions": 0,
+                "users": 0,
+                "conversions": 0,
+                "conversionRate": 0.0,
+            },
+            "countries": [],
+            "cities": [],
+            "note": "Aggregate live mode across multiple LPs is coming soon. Pick a single LP to see live data.",
+        }
     data = generate_locations(urls, start, end)
     return {
         "scope": {"lpId": lp_id or "all", "lpCount": len(lps)},
@@ -1227,35 +1347,8 @@ app.add_middleware(
 
 
 @app.on_event("startup")
-async def _seed_demo_pages():
-    count = await db.landing_pages.count_documents({})
-    if count == 0:
-        seeds = [
-            {
-                "name": "Pricing Page",
-                "url": "https://acme.com/pricing",
-                "description": "Main pricing landing page with 3 plan tiers.",
-                "ga_path_filter": "/pricing",
-            },
-            {
-                "name": "Product Launch — Fall 2025",
-                "url": "https://acme.com/launch/fall-2025",
-                "description": "Campaign LP driven from paid social + newsletter.",
-                "ga_path_filter": "/launch/fall-2025",
-            },
-            {
-                "name": "Free Trial Signup",
-                "url": "https://acme.com/trial",
-                "description": "Bottom-of-funnel LP for free trial conversions.",
-                "ga_path_filter": "/trial",
-            },
-        ]
-        for s in seeds:
-            lp = LandingPage(**s)
-            doc = lp.model_dump()
-            doc["created_at"] = doc["created_at"].isoformat()
-            await db.landing_pages.insert_one(doc)
-        logger.info("Seeded %d demo landing pages", len(seeds))
+async def _startup():
+    logger.info("Lens backend up. Demo seeding disabled.")
 
 
 @app.on_event("shutdown")
