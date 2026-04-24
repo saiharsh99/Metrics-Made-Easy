@@ -21,6 +21,7 @@ export function AppProvider({ children }) {
   const [lpId, setLpIdState] = useState("all");
   const [range, setRangeState] = useState(defaultRange());
   const [refreshToken, setRefreshToken] = useState(0);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(new Date().toISOString());
   const [pages, setPages] = useState([]);
   const [pagesLoading, setPagesLoading] = useState(true);
 
@@ -75,6 +76,7 @@ export function AppProvider({ children }) {
         /* ignore */
       }
     }
+    setLastRefreshedAt(new Date().toISOString());
     setRefreshToken((n) => n + 1);
   }, []);
 
@@ -90,6 +92,7 @@ export function AppProvider({ children }) {
         setRange,
         refresh,
         refreshToken,
+        lastRefreshedAt,
         pages,
         pagesLoading,
       }}

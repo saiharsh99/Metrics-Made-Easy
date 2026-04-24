@@ -1,5 +1,5 @@
 import { useLocation } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "@/lib/app-context";
 import { Label } from "@/components/ui/label";
 import {
@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import DateRangePicker from "@/components/DateRangePicker";
 import { ArrowClockwise, Funnel } from "@phosphor-icons/react";
 import { toast } from "sonner";
+import { formatDistanceToNow, parseISO, format } from "date-fns";
 
 // Routes where the toolbar should appear + which controls are relevant.
 const ROUTE_CONFIG = {
@@ -31,8 +32,23 @@ function routeConfig(pathname) {
 export default function GlobalToolbar() {
   const location = useLocation();
   const cfg = routeConfig(location.pathname);
-  const { lpId, setLpId, range, setRange, refresh, pages } = useApp();
+  const {
+    lpId,
+    setLpId,
+    range,
+    setRange,
+    refresh,
+    pages,
+    lastRefreshedAt,
+  } = useApp();
   const [refreshing, setRefreshing] = useState(false);
+  const [tick, setTick] = useState(0);
+
+  // Re-render every 30s so the relative time stays accurate.
+  useEffect(() => {
+    const id = setInterval(() => setTick((n) => n + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   if (!cfg) return null;
 
@@ -47,6 +63,16 @@ export default function GlobalToolbar() {
       setTimeout(() => setRefreshing(false), 400);
     }
   };
+
+  const refreshedDate = lastRefreshedAt ? parseISO(lastRefreshedAt) : null;
+  const relative = refreshedDate
+    ? formatDistanceToNow(refreshedDate, { addSuffix: true })
+    : "—";
+  const absolute = refreshedDate
+    ? format(refreshedDate, "MMM d, HH:mm:ss")
+    : "—";
+  // Reference tick to silence the linter - the value changes force a re-render.
+  void tick;
 
   return (
     <div
@@ -93,19 +119,33 @@ export default function GlobalToolbar() {
           </div>
         )}
         <div className="flex-1" />
-        <Button
-          variant="outline"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          className="border-zinc-200 hover:bg-zinc-100 h-9"
-          data-testid="global-refresh"
-        >
-          <ArrowClockwise
-            size={14}
-            className={`mr-1.5 ${refreshing ? "animate-spin" : ""}`}
-          />
-          {refreshing ? "Refreshing…" : "Refresh"}
-        </Button>
+        <div className="flex items-center gap-3">
+          <div
+            className="text-right"
+            title={absolute}
+            data-testid="last-refreshed-at"
+          >
+            <div className="text-[9px] uppercase tracking-[0.22em] font-bold text-zinc-500">
+              Last refreshed
+            </div>
+            <div className="text-xs mono-font text-zinc-700 font-semibold">
+              {relative}
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="border-zinc-200 hover:bg-zinc-100 h-9"
+            data-testid="global-refresh"
+          >
+            <ArrowClockwise
+              size={14}
+              className={`mr-1.5 ${refreshing ? "animate-spin" : ""}`}
+            />
+            {refreshing ? "Refreshing…" : "Refresh"}
+          </Button>
+        </div>
       </div>
     </div>
   );

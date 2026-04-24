@@ -108,6 +108,32 @@ export default function Clarity() {
 
   const summary =
     lpId === "all" ? aggregate?.totals : data?.summary || null;
+
+  // Pull stale / rate-limit signals from the loaded payload(s).
+  const status = useMemo(() => {
+    if (lpId === "all") {
+      const anyStale = perLp.some((x) => x.clarity?.stale);
+      const anyRateLimited = perLp.some((x) => x.clarity?.rateLimited);
+      const fetchedAts = perLp
+        .map((x) => x.clarity?.fetchedAt)
+        .filter(Boolean)
+        .sort();
+      const resetAt = perLp.find((x) => x.clarity?.rateLimitResetAt)?.clarity
+        ?.rateLimitResetAt;
+      return {
+        stale: anyStale,
+        rateLimited: anyRateLimited,
+        fetchedAt: fetchedAts[fetchedAts.length - 1] || null,
+        resetAt,
+      };
+    }
+    return {
+      stale: data?.stale,
+      rateLimited: data?.rateLimited,
+      fetchedAt: data?.fetchedAt,
+      resetAt: data?.rateLimitResetAt,
+    };
+  }, [data, perLp, lpId]);
   const hotspots = useMemo(() => {
     if (lpId === "all") {
       // merge hotspots across LPs by selector
@@ -220,6 +246,10 @@ export default function Clarity() {
             <Link to="/landing-pages">Add a landing page</Link>
           </Button>
         </div>
+      )}
+
+      {(status.rateLimited || status.stale) && (
+        <ClarityStatusBanner status={status} />
       )}
 
       {summary && (
@@ -665,3 +695,50 @@ function Kv({ label, value, highlight }) {
     </div>
   );
 }
+
+function ClarityStatusBanner({ status }) {
+  const { rateLimited, stale, fetchedAt, resetAt } = status;
+  const fetchedRel = fetchedAt
+    ? formatDistanceToNow(parseISO(fetchedAt), { addSuffix: true })
+    : null;
+  const resetRel = resetAt
+    ? formatDistanceToNow(parseISO(resetAt), { addSuffix: true })
+    : null;
+
+  if (rateLimited) {
+    return (
+      <div
+        className="p-4 rounded-md border border-amber-300 bg-amber-50 text-amber-900 flex items-start gap-3"
+        data-testid="clarity-rate-banner"
+      >
+        <WarningCircle size={20} weight="fill" className="text-amber-600 shrink-0 mt-0.5" />
+        <div className="text-sm leading-relaxed">
+          <div className="font-bold mb-1">
+            Microsoft Clarity daily API limit reached
+          </div>
+          <div className="text-xs">
+            Microsoft caps the Clarity Data Export API at <strong>10 requests
+            per project per day</strong>. The numbers below are from the last
+            successful fetch{fetchedRel ? ` ${fetchedRel}` : ""}. Live calls
+            resume {resetRel || "after midnight UTC"}.
+          </div>
+        </div>
+      </div>
+    );
+  }
+  if (stale) {
+    return (
+      <div
+        className="p-3 rounded-md border border-zinc-200 bg-zinc-50 text-zinc-700 text-xs flex items-center gap-2"
+        data-testid="clarity-stale-banner"
+      >
+        <Clock size={14} weight="duotone" />
+        Showing the last successful Clarity snapshot
+        {fetchedRel ? ` (${fetchedRel})` : ""} — Clarity API didn&apos;t respond
+        on the last try.
+      </div>
+    );
+  }
+  return null;
+}
+

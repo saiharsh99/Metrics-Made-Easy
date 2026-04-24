@@ -349,10 +349,26 @@ async def delete_credentials(provider: Literal["ga4", "clarity"]):
 
 @api.post("/cache/clear")
 async def clear_cache() -> Dict[str, Any]:
-    """Drop any in-process caches so the next request re-fetches live."""
+    """Drop the in-process Clarity cache.
+
+    Persistent MongoDB snapshots are kept so the UI can still serve the
+    last-known good Clarity payload when the daily API limit is hit.
+    """
     before = len(clarity_cache)
     clarity_cache.clear()
     return {"cleared": True, "clarityEntriesCleared": before}
+
+
+@api.get("/clarity/status")
+async def clarity_status() -> Dict[str, Any]:
+    rate_until = await _is_clarity_rate_limited()
+    snapshots = await db.clarity_snapshots.count_documents({})
+    return {
+        "rateLimited": bool(rate_until),
+        "rateLimitResetAt": rate_until,
+        "snapshots": snapshots,
+        "memoryCacheEntries": len(clarity_cache),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -476,54 +492,157 @@ async def _ga4_timeseries_for(
     return generate_ga4_timeseries(lp["url"], start, end)
 
 
+async def _record_clarity_snapshot(cache_key: str, lp_id: str, days: int, data: Dict[str, Any]) -> None:
+    """Persist a successful Clarity fetch so we can serve it back when rate-limited."""
+    await db.clarity_snapshots.update_one(
+        {"_id": cache_key},
+        {
+            "$set": {
+                "lp_id": lp_id,
+                "days": days,
+                "data": data,
+                "fetched_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+        upsert=True,
+    )
+
+
+async def _load_clarity_snapshot(cache_key: str) -> Optional[Dict[str, Any]]:
+    doc = await db.clarity_snapshots.find_one({"_id": cache_key})
+    if not doc:
+        return None
+    data = doc.get("data") or {}
+    data["stale"] = True
+    data["fetchedAt"] = doc.get("fetched_at")
+    return data
+
+
+async def _set_clarity_rate_limited() -> None:
+    # Clarity's quota resets at UTC midnight. Lock out until then.
+    now = datetime.now(timezone.utc)
+    reset = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    await db.system.update_one(
+        {"_id": "clarity_state"},
+        {"$set": {"rate_limit_until": reset.isoformat()}},
+        upsert=True,
+    )
+
+
+async def _clear_clarity_rate_limit() -> None:
+    await db.system.update_one(
+        {"_id": "clarity_state"},
+        {"$unset": {"rate_limit_until": ""}},
+    )
+
+
+async def _is_clarity_rate_limited() -> Optional[str]:
+    doc = await db.system.find_one({"_id": "clarity_state"})
+    if not doc:
+        return None
+    until = doc.get("rate_limit_until")
+    if not until:
+        return None
+    try:
+        until_dt = datetime.fromisoformat(until)
+    except (TypeError, ValueError):
+        return None
+    if until_dt <= datetime.now(timezone.utc):
+        await _clear_clarity_rate_limit()
+        return None
+    return until
+
+
 async def _clarity_for(lp: Dict[str, Any], days: int) -> Dict[str, Any]:
     service = await _get_clarity_service()
     cache_key = f"clarity::{lp['id']}::{days}"
-    if service and cache_key in clarity_cache:
+
+    # Demo-mode fallback when no token at all
+    if not service:
+        return generate_clarity(lp["url"], days)
+
+    # In-memory hot cache (2h TTL)
+    if cache_key in clarity_cache:
         return clarity_cache[cache_key]
-    if service:
-        try:
-            insights = service.project_live_insights(
-                num_of_days=days, dimensions=["URL"]
-            )
-            summary_raw = insights if isinstance(insights, dict) else {}
-            result = {
-                "summary": {
-                    "sessions": int(summary_raw.get("totalSessionCount", 0) or 0),
-                    "rageClicks": int(summary_raw.get("totalRageClicks", 0) or 0),
-                    "deadClicks": int(summary_raw.get("totalDeadClicks", 0) or 0),
-                    "quickBacks": int(summary_raw.get("totalQuickBacks", 0) or 0),
-                    "excessiveScroll": int(
-                        summary_raw.get("totalExcessiveScroll", 0) or 0
-                    ),
-                    "avgScrollDepth": float(summary_raw.get("avgScrollDepth", 0) or 0),
-                    "avgEngagementTime": float(
-                        summary_raw.get("avgEngagementTime", 0) or 0
-                    ),
-                },
-                "hotspots": [],
-                "recordings": [],
-                "raw": summary_raw,
-            }
-            clarity_cache[cache_key] = result
-            return result
-        except Exception as exc:
+
+    # If we already know we're rate-limited, skip the API call entirely
+    rate_until = await _is_clarity_rate_limited()
+    if rate_until:
+        snap = await _load_clarity_snapshot(cache_key)
+        if snap:
+            snap["rateLimited"] = True
+            snap["rateLimitResetAt"] = rate_until
+            return snap
+        return {
+            "summary": {
+                "sessions": 0,
+                "rageClicks": 0,
+                "deadClicks": 0,
+                "quickBacks": 0,
+                "excessiveScroll": 0,
+                "avgScrollDepth": 0.0,
+                "avgEngagementTime": 0.0,
+            },
+            "hotspots": [],
+            "recordings": [],
+            "rateLimited": True,
+            "rateLimitResetAt": rate_until,
+        }
+
+    # Try live API
+    try:
+        insights = service.project_live_insights(num_of_days=days, dimensions=["URL"])
+        summary_raw = insights if isinstance(insights, dict) else {}
+        result = {
+            "summary": {
+                "sessions": int(summary_raw.get("totalSessionCount", 0) or 0),
+                "rageClicks": int(summary_raw.get("totalRageClicks", 0) or 0),
+                "deadClicks": int(summary_raw.get("totalDeadClicks", 0) or 0),
+                "quickBacks": int(summary_raw.get("totalQuickBacks", 0) or 0),
+                "excessiveScroll": int(summary_raw.get("totalExcessiveScroll", 0) or 0),
+                "avgScrollDepth": float(summary_raw.get("avgScrollDepth", 0) or 0),
+                "avgEngagementTime": float(summary_raw.get("avgEngagementTime", 0) or 0),
+            },
+            "hotspots": [],
+            "recordings": [],
+            "raw": summary_raw,
+            "fetchedAt": datetime.now(timezone.utc).isoformat(),
+            "stale": False,
+        }
+        clarity_cache[cache_key] = result
+        await _record_clarity_snapshot(cache_key, lp["id"], days, result)
+        return result
+    except Exception as exc:
+        text = str(exc).lower()
+        if "limit" in text or "429" in text or "exceed" in text:
+            await _set_clarity_rate_limited()
+            logger.warning("Clarity rate-limited; falling back to last snapshot.")
+        else:
             logger.warning("Clarity fetch failed: %s", exc)
-            empty = {
-                "summary": {
-                    "sessions": 0,
-                    "rageClicks": 0,
-                    "deadClicks": 0,
-                    "quickBacks": 0,
-                    "excessiveScroll": 0,
-                    "avgScrollDepth": 0.0,
-                    "avgEngagementTime": 0.0,
-                },
-                "hotspots": [],
-                "recordings": [],
-            }
-            return empty
-    return generate_clarity(lp["url"], days)
+        snap = await _load_clarity_snapshot(cache_key)
+        if snap:
+            snap["error"] = str(exc)
+            if "limit" in text or "429" in text:
+                snap["rateLimited"] = True
+                rate_until = await _is_clarity_rate_limited()
+                if rate_until:
+                    snap["rateLimitResetAt"] = rate_until
+            return snap
+        empty = {
+            "summary": {
+                "sessions": 0,
+                "rageClicks": 0,
+                "deadClicks": 0,
+                "quickBacks": 0,
+                "excessiveScroll": 0,
+                "avgScrollDepth": 0.0,
+                "avgEngagementTime": 0.0,
+            },
+            "hotspots": [],
+            "recordings": [],
+            "error": str(exc),
+        }
+        return empty
 
 
 @api.get("/analytics/overview")
