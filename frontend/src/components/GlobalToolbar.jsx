@@ -22,6 +22,10 @@ const ROUTE_CONFIG = {
   "/audience": { lp: true, range: true },
   "/locations": { lp: true, range: true },
   "/clarity": { lp: true, range: true },
+  "/meta-ads": { lp: false, range: true },
+  "/google-ads": { lp: false, range: true },
+  "/search-console": { lp: false, range: true },
+  "/crm": { lp: false, range: true },
 };
 
 function routeConfig(pathname) {
@@ -79,7 +83,7 @@ export default function GlobalToolbar() {
       className="bg-white border-b border-zinc-200 sticky top-16 z-40"
       data-testid="global-toolbar"
     >
-      <div className="max-w-[1600px] mx-auto px-4 md:px-8 lg:px-12 py-3 flex flex-wrap items-end gap-4">
+      <div className="px-4 md:px-8 lg:px-10 py-3 flex flex-wrap items-end gap-4">
         {cfg.lp && (
           <div className="flex-1 min-w-[220px] max-w-sm">
             <Label className="text-[9px] uppercase tracking-[0.22em] font-bold text-zinc-500 flex items-center gap-1.5">

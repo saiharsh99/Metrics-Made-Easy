@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 3 covered the 4 new marketing demo dashboards (Meta Ads, Google Ads, Search Console, CRM) and the restructured 4-section LEFT SIDEBAR + Settings footer. Backend: added /app/backend/tests/test_marketing_api.py (13 tests) — all pass. Combined suite 42/44 pass; 2 failures are PRE-EXISTING and unrelated to this iteration (LP seed only created 1 LP in DB instead of 3 — likely from prior runs). Frontend: full Playwright walk-through over /, /meta-ads, /google-ads, /search-console, /crm + regression on /landing-pages, /sources, /audience, /locations, /clarity, /compare, /settings. All target data-testids present, KPI strips/cards/charts/tables render, tab filters and search inputs work, GlobalToolbar shows on all 4 new routes, refresh button triggers re-fetch network call to the corresponding endpoint. Zero console errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/landing-pages", "issue": "Seed-on-startup is non-idempotent — DB now has only 1 LP (Metrics Made Easy) instead of the 3 expected (Pricing/Launch/Trial). Pre-existing — 2 regression tests in test_analytics_api.py fail (test_list_seeded, test_summary). Not introduced by this iteration."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_marketing_api.py",
+    "/app/test_reports/pytest/pytest_marketing_results.xml"
+  ],
+  "action_items": [
+    "(P3, pre-existing) Make landing-page seed idempotent on each startup or expose a /api/admin/reseed endpoint so demo DB stays at 3 LPs even if older docs are deleted.",
+    "(P1, mocked-API note from request) Wire real Meta/Google/GSC/CRM integrations — all 4 endpoints currently return DEMO data only.",
+    "(carryover from iter_2) server.py is now ~1573 lines; split into routers (credentials, landing_pages, analytics_*, marketing) — maintainability is degrading."
+  ],
+  "critical_code_review_comments": [
+    "/api/analytics/ads/meta, /ads/google, /organic/search-console, /crm have no input validation on start_date/end_date — bad strings will raise inside _parse_date and surface as 500s rather than 400s. Wrap in try/except and return HTTPException(400).",
+    "Marketing endpoints don't accept lp_id (intentional per spec) but also have no caching and re-generate the demo dataset on every request. Fine for demo, but add an in-memory LRU keyed on (start,end) before live integrations land.",
+    "GlobalToolbar ROUTE_CONFIG is duplicated knowledge already known to each page (each page also imports useApp().range). Consider exposing a useToolbarConfig hook so a new route doesn't need edits in both places.",
+    "Layout NAV_GROUPS is hard-coded; section testids are derived via .toLowerCase().replace(/\\s+/g,'-') — brittle if a section name changes spacing. Prefer explicit slugs in the config."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_marketing_api.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% on new endpoints (13/13). Full suite 42/44 (2 pre-existing seed-related failures).",
+    "frontend": "100% (all data-testids, navigations, integrations verified, 0 console errors)"
+  },
+  "test_credentials": "N/A (DEMO mode, no auth)",
+  "seed_data_creation": "None. Used the single existing landing page in the DB.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/ -v` for full coverage (44 tests). New marketing endpoints (no lp_id): GET /api/analytics/ads/meta, /api/analytics/ads/google, /api/analytics/organic/search-console, /api/analytics/crm. All accept optional start_date/end_date (yyyy-mm-dd or <N>daysAgo, default last 30d). All return mode='demo'. Frontend pages live at /meta-ads, /google-ads, /search-console, /crm and share GlobalToolbar (range-only, no LP picker). Sidebar testids: app-sidebar, nav-section-{landing-page-experience,ad-platforms,organic-updates,crm-level-data}, plus per-link data-testid. Pre-existing seeding issue: only 1 LP in DB — if you need 3 LPs, manually POST to /api/landing-pages first.",
+  "rca of the issue": "No new bugs found in iteration_3 scope. The 2 backend test failures (test_list_seeded, test_summary) RCA: seed_landing_pages() at startup only inserts the 3 default LPs when the collection is EMPTY; once any LP exists (or all defaults were deleted), seeding is skipped. Mitigation: change seed to upsert each default by a stable id, or add an admin reseed endpoint."
+}

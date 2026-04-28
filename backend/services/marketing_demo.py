@@ -531,3 +531,172 @@ def generate_search_console(start: date, end: date) -> Dict[str, Any]:
         "devices": devices,
         "countries": countries,
     }
+
+
+# ---------------------------------------------------------------------------
+# CRM (demo)
+# ---------------------------------------------------------------------------
+CRM_STAGES = [
+    ("New", "new", "#0ea5e9"),
+    ("Qualified", "qualified", "#2563eb"),
+    ("Proposal", "proposal", "#7c3aed"),
+    ("Negotiation", "negotiation", "#db2777"),
+    ("Closed-Won", "won", "#16a34a"),
+    ("Closed-Lost", "lost", "#71717a"),
+]
+CRM_SOURCES = [
+    "Meta Ads",
+    "Google Ads",
+    "Google Organic",
+    "Direct",
+    "Referral",
+    "Email",
+    "LinkedIn",
+]
+CRM_OWNERS = [
+    "Aanya M.",
+    "Vikram S.",
+    "Riya K.",
+    "Arjun P.",
+    "Neha B.",
+    "Karthik R.",
+]
+CRM_COMPANIES = [
+    "Northwind",
+    "Globex",
+    "Initech",
+    "Umbrella",
+    "Soylent",
+    "Acme",
+    "Hooli",
+    "Pied Piper",
+    "Stark Industries",
+    "Wayne Ent.",
+    "Wonka",
+    "Cyberdyne",
+    "Tyrell Corp",
+    "Massive Dynamic",
+]
+
+
+def generate_crm(start: date, end: date) -> Dict[str, Any]:
+    rnd = _rng(_seed_from("crm", str(start), str(end)))
+    days = _daterange(start, end)
+    n_days = max(len(days), 1)
+
+    # Pipeline by stage
+    by_stage = []
+    total_pipeline = 0.0
+    total_count = 0
+    for label, key, color in CRM_STAGES:
+        count = rnd.randint(8, 60) if key not in ("won", "lost") else rnd.randint(4, 24)
+        avg_value = rnd.uniform(45_000, 320_000)
+        value = round(count * avg_value, 2)
+        total_count += count
+        if key not in ("lost",):
+            total_pipeline += value
+        by_stage.append(
+            {
+                "key": key,
+                "label": label,
+                "count": count,
+                "value": value,
+                "color": color,
+            }
+        )
+
+    # Lead-source attribution
+    by_source = []
+    src_total_leads = 0
+    for s in CRM_SOURCES:
+        leads = rnd.randint(40, 380)
+        deals = int(leads * rnd.uniform(0.06, 0.22))
+        won = int(deals * rnd.uniform(0.18, 0.42))
+        revenue = round(won * rnd.uniform(60_000, 280_000), 2)
+        src_total_leads += leads
+        by_source.append(
+            {
+                "source": s,
+                "leads": leads,
+                "deals": deals,
+                "won": won,
+                "revenue": revenue,
+                "winRate": round(won / max(deals, 1) * 100, 1),
+            }
+        )
+    by_source.sort(key=lambda r: r["revenue"], reverse=True)
+
+    # Daily new-leads + revenue trend
+    trend = []
+    base_leads = rnd.randint(40, 140)
+    base_rev = rnd.uniform(180_000, 640_000)
+    for i, d in enumerate(days):
+        weekly = 1.0 + 0.20 * math.sin((i / 7.0) * 2 * math.pi)
+        noise = rnd.uniform(0.78, 1.22)
+        leads = max(0, int(base_leads * weekly * noise / 7))
+        revenue = round(base_rev * weekly * noise / 30, 2)
+        trend.append(
+            {
+                "date": d.isoformat(),
+                "leads": leads,
+                "revenue": revenue,
+            }
+        )
+
+    # Recent deals
+    deals = []
+    for _ in range(18):
+        stage = rnd.choices(
+            CRM_STAGES, weights=[3, 4, 3, 2, 2, 1.2], k=1
+        )[0]
+        owner = rnd.choice(CRM_OWNERS)
+        company = rnd.choice(CRM_COMPANIES)
+        source = rnd.choice(CRM_SOURCES)
+        value = round(rnd.uniform(38_000, 480_000), 2)
+        age_days = rnd.randint(1, 42)
+        deals.append(
+            {
+                "id": f"deal_{rnd.randint(10**6, 10**7 - 1)}",
+                "name": f"{company} · {rnd.choice(['Annual', 'Pilot', 'Expansion', 'Renewal', 'Net new'])}",
+                "company": company,
+                "owner": owner,
+                "source": source,
+                "stage": stage[0],
+                "stageKey": stage[1],
+                "value": value,
+                "ageDays": age_days,
+                "probability": rnd.choice([10, 25, 40, 60, 75, 90])
+                if stage[1] not in ("won", "lost")
+                else (100 if stage[1] == "won" else 0),
+            }
+        )
+    deals.sort(key=lambda r: r["value"], reverse=True)
+
+    won_deals = [d for d in deals if d["stageKey"] == "won"]
+    lost_deals = [d for d in deals if d["stageKey"] == "lost"]
+    won_value = sum(d["value"] for d in won_deals)
+    win_rate = round(
+        len(won_deals) / max(len(won_deals) + len(lost_deals), 1) * 100, 1
+    )
+    avg_deal_size = round(
+        sum(d["value"] for d in deals) / max(len(deals), 1), 2
+    )
+    sales_cycle = round(rnd.uniform(18.0, 42.0), 1)
+
+    return {
+        "totals": {
+            "leads": src_total_leads,
+            "openDeals": total_count
+            - sum(s["count"] for s in by_stage if s["key"] in ("won", "lost")),
+            "pipeline": round(total_pipeline, 2),
+            "wonRevenue": round(won_value, 2),
+            "winRate": win_rate,
+            "avgDealSize": avg_deal_size,
+            "salesCycleDays": sales_cycle,
+        },
+        "byStage": by_stage,
+        "bySource": by_source,
+        "trend": trend,
+        "deals": deals,
+    }
+

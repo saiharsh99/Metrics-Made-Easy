@@ -28,6 +28,12 @@ from services.demo_data import (
     generate_traffic_sources,
 )
 from services.ga4_service import GA4Service
+from services.marketing_demo import (
+    generate_crm,
+    generate_google_ads,
+    generate_meta_ads,
+    generate_search_console,
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
@@ -1476,6 +1482,69 @@ async def analytics_locations(
     return {
         "scope": {"lpId": lp_id or "all", "lpCount": len(lps)},
         "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+        **data,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Marketing demo dashboards (Ad platforms · Organic · CRM)
+# ---------------------------------------------------------------------------
+@api.get("/analytics/ads/meta")
+async def analytics_meta_ads(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    end = _parse_date(end_date or "today")
+    start = _parse_date(start_date or (end - timedelta(days=29)).isoformat())
+    data = generate_meta_ads(start, end)
+    return {
+        "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+        "mode": "demo",
+        **data,
+    }
+
+
+@api.get("/analytics/ads/google")
+async def analytics_google_ads(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    end = _parse_date(end_date or "today")
+    start = _parse_date(start_date or (end - timedelta(days=29)).isoformat())
+    data = generate_google_ads(start, end)
+    return {
+        "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+        "mode": "demo",
+        **data,
+    }
+
+
+@api.get("/analytics/organic/search-console")
+async def analytics_search_console(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    end = _parse_date(end_date or "today")
+    start = _parse_date(start_date or (end - timedelta(days=29)).isoformat())
+    data = generate_search_console(start, end)
+    return {
+        "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+        "mode": "demo",
+        **data,
+    }
+
+
+@api.get("/analytics/crm")
+async def analytics_crm(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+):
+    end = _parse_date(end_date or "today")
+    start = _parse_date(start_date or (end - timedelta(days=29)).isoformat())
+    data = generate_crm(start, end)
+    return {
+        "dateRange": {"start": start.isoformat(), "end": end.isoformat()},
+        "mode": "demo",
         **data,
     }
 
