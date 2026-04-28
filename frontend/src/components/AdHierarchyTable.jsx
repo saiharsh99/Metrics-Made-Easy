@@ -8,6 +8,7 @@ import {
   MagnifyingGlass,
   CaretRight,
   X,
+  DownloadSimple,
 } from "@phosphor-icons/react";
 
 const CURRENCY = (v) => `₹${formatNumber(v)}`;
@@ -106,6 +107,19 @@ export default function AdHierarchyTable({
       ? filteredMid
       : filteredAds;
 
+  const handleExport = () => {
+    const levelLabel =
+      level === "campaigns"
+        ? "campaigns"
+        : level === "mid"
+        ? midLabel.toLowerCase().replace(/\s+/g, "-")
+        : "ads";
+    const filename = `${testIdPrefix}-${levelLabel}-${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    downloadCSV(rows, level, midLabel, typeLabels, typeAccessor, showLeadsCol, filename);
+  };
+
   return (
     <section
       className="bg-white border border-zinc-200 rounded-lg overflow-hidden"
@@ -164,6 +178,17 @@ export default function AdHierarchyTable({
                 data-testid={`${testIdPrefix}-search`}
               />
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={rows.length === 0}
+              className="border-zinc-200 hover:bg-zinc-100 h-9"
+              data-testid={`${testIdPrefix}-export-csv`}
+            >
+              <DownloadSimple size={14} className="mr-1.5" weight="duotone" />
+              CSV
+            </Button>
           </div>
         </div>
 
@@ -248,6 +273,76 @@ function Crumb({ label, value, onClear, testId }) {
       </button>
     </span>
   );
+}
+
+function csvEscape(value) {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+  if (/[",\n\r]/.test(str)) return `"${str.replace(/"/g, '""')}"`;
+  return str;
+}
+
+function downloadCSV(
+  rows,
+  level,
+  midLabel,
+  typeLabels,
+  typeAccessor,
+  showLeadsCol,
+  filename
+) {
+  const firstCol =
+    level === "campaigns" ? "Campaign" : level === "mid" ? midLabel.replace(/s$/, "") : "Ad";
+  const parentCol = level === "mid" ? "Campaign" : level === "ads" ? midLabel.replace(/s$/, "") : null;
+  const headers = [
+    firstCol,
+    ...(parentCol ? [parentCol] : []),
+    "Type",
+    "Status",
+    "Spend",
+    "Impressions",
+    "Clicks",
+    "CTR (%)",
+    "CPC",
+    ...(showLeadsCol ? ["Leads"] : []),
+    "Conversions",
+    "CPA",
+    "ROAS",
+  ];
+  const lines = [headers.map(csvEscape).join(",")];
+  rows.forEach((r) => {
+    const parent =
+      level === "mid"
+        ? r.campaignName
+        : level === "ads"
+        ? r.adsetName || r.adGroupName
+        : null;
+    const cells = [
+      r.name,
+      ...(parentCol ? [parent || ""] : []),
+      typeLabels[typeAccessor(r)] || typeAccessor(r) || "",
+      r.status || "",
+      r.spend ?? "",
+      r.impressions ?? "",
+      r.clicks ?? "",
+      r.ctr ?? "",
+      r.cpc ?? "",
+      ...(showLeadsCol ? [r.leads ?? 0] : []),
+      r.conversions ?? 0,
+      r.cpa ?? "",
+      r.roas ?? "",
+    ];
+    lines.push(cells.map(csvEscape).join(","));
+  });
+  const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function LevelTable({
