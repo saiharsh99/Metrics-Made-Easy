@@ -241,6 +241,7 @@ def generate_meta_ads(start: date, end: date) -> Dict[str, Any]:
                 "roas": round(revenue / max(spend, 1), 2) if revenue else 0.0,
             }
         )
+    adsets = _meta_adsets(rnd, campaigns)
     return {
         "totals": {
             "spend": round(total_spend, 2),
@@ -260,8 +261,8 @@ def generate_meta_ads(start: date, end: date) -> Dict[str, Any]:
         },
         "byObjective": by_objective,
         "campaigns": sorted(campaigns, key=lambda c: c["spend"], reverse=True),
-        "adsets": _meta_adsets(rnd, campaigns),
-        "ads": _meta_ads(rnd, campaigns),
+        "adsets": adsets,
+        "ads": _meta_ads(rnd, adsets),
         "trend": series_by_obj,
     }
 
@@ -320,9 +321,8 @@ def _meta_adsets(rnd: random.Random, campaigns: List[Dict[str, Any]]) -> List[Di
     return out
 
 
-def _meta_ads(rnd: random.Random, campaigns: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _meta_ads(rnd: random.Random, adsets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
-    adsets = _meta_adsets(rnd, campaigns)
     for s in adsets:
         n = min(len(META_AD_FORMATS), rnd.randint(1, 3))
         spends = _split_proportional(rnd, s["spend"], n)
@@ -490,6 +490,7 @@ def generate_google_ads(start: date, end: date) -> Dict[str, Any]:
                 "roas": round(revenue / max(spend, 1), 2) if revenue else 0.0,
             }
         )
+    adgroups = _gads_adgroups(rnd, campaigns)
     return {
         "totals": {
             "spend": round(total_spend, 2),
@@ -507,8 +508,8 @@ def generate_google_ads(start: date, end: date) -> Dict[str, Any]:
         },
         "byType": by_type,
         "campaigns": sorted(campaigns, key=lambda c: c["spend"], reverse=True),
-        "adGroups": _gads_adgroups(rnd, campaigns),
-        "ads": _gads_ads(rnd, campaigns),
+        "adGroups": adgroups,
+        "ads": _gads_ads(rnd, adgroups),
         "trend": series_by_type,
     }
 
@@ -578,9 +579,8 @@ def _gads_adgroups(rnd: random.Random, campaigns: List[Dict[str, Any]]) -> List[
     return out
 
 
-def _gads_ads(rnd: random.Random, campaigns: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def _gads_ads(rnd: random.Random, adgroups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
-    adgroups = _gads_adgroups(rnd, campaigns)
     for g in adgroups:
         pool = GADS_AD_FORMATS.get(g["typeKey"], ["Default ad"])
         n = min(len(pool), rnd.randint(1, 3))

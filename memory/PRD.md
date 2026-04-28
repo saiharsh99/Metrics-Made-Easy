@@ -1,59 +1,69 @@
-# Lens — Unified LP Analytics Dashboard (GA4 + Microsoft Clarity)
+# Lens — Unified LP Analytics
 
-## Original problem statement
-"connect google analytics & microsoft clarity data in a unified dashboard to view LP performance"
+## Original Problem Statement
+Connect Google Analytics & Microsoft Clarity data in a unified dashboard to view LP performance.
+- Custom date range selector; Real-time + historical data.
+- Advanced filtering and comparison.
+- Later requested: Ad platforms (Meta Ads, Google Ads), Organic (Google Search Console),
+  and CRM integrations structured under specific navigation headers
+  ("Landing page Experience", "Ad platforms", "Organic updates", "CRM level data").
+- Latest requested: Ad-platform dashboards must support Campaign → Ad set / Ad group → Ad
+  level monitoring with drill-down.
 
 ## Architecture
-- **Frontend**: React 19 + React Router + Recharts + shadcn/ui + Phosphor Icons. Swiss & High-Contrast design (light zinc palette, Chivo + IBM Plex Sans).
-- **Backend**: FastAPI (async) + Motor/MongoDB. GA4 via `google-analytics-data` (service-account auth). Clarity via Data Export API (Bearer token). In-process TTL cache (2h) for Clarity to respect 10/day quota.
-- **Demo mode**: Deterministic demo data keyed off LP URL + date, used as fallback whenever credentials are missing or a provider call fails.
+- **Backend**: FastAPI + MongoDB (Motor). Single entrypoint `/app/backend/server.py`.
+- **Frontend**: React + Tailwind + Shadcn UI + Recharts + Phosphor icons.
+- **Global state**: `app-context.jsx` holds the selected LP, Date Range and refresh token. Toolbar
+  appears on all data routes. Routes that aren't LP-scoped (Meta/Google/GSC/CRM) hide the LP picker.
+- **Caching**: Microsoft Clarity is rate-limited to 10/day → MongoDB `clarity_snapshots` cache.
 
-## User personas
-- **Growth / PMM**: wants to compare LP performance in one place (the "what" from GA4 + the "why" from Clarity).
-- **Product/UX**: hunts rage and dead clicks, watches engagement scores.
-- **CRO analyst**: compares date ranges, tracks conversion rate against bounce.
+## Navigation (Left Sidebar — 4 sections + Settings)
+1. **Landing page Experience** — Overview, Pages, Sources, Audience, Locations, Clarity, Compare.
+2. **Ad platforms** — Meta Ads, Google Ads (each with Campaign → Ad set/Ad group → Ad drill-down).
+3. **Organic updates** — Search Console.
+4. **CRM level data** — CRM (demo: pipeline by stage, lead-source attribution, deal table).
 
-## Core requirements (static)
-1. Dashboard combining GA4 + Clarity for every landing page.
-2. Custom date range selector + realtime view.
-3. Advanced filtering and period-vs-period comparison.
-4. Per-LP deep dive: traffic, conversions, devices, geography, frustration hotspots, session recordings.
-5. Credentials management UI with clear instructions (no CLI required).
-6. Monochrome Swiss dashboard feel, Chivo display + IBM Plex body.
+## Implementation log
+- 2026-04-28 — MVP: GA4 + Clarity unified dashboards, Settings flow, Live credentials with pre-save validation.
+- 2026-04-28 — Added Sources, Audience, Locations, dedicated Clarity, global toolbar (LP + date range + refresh).
+- 2026-04-28 — Clarity DB-cache to bypass 10/day API limit.
+- 2026-04-28 — Restructured nav into 4 sections in a left sidebar; added Meta Ads, Google Ads,
+  Search Console, CRM dashboards (DEMO data).
+- 2026-04-28 — Ad platforms: added Campaign → Ad set / Ad group → Ad hierarchy with drill-down,
+  breadcrumb pills and Reset button. Backend `marketing_demo.py` now generates child rows whose
+  metrics sum back to parent (within ±0.05 spend / ±2 unit drift).
 
-## What's been implemented
+## Backlog
+### P1
+- Replace Meta Ads demo with **live Marketing API** (collect access token + ad-account id in Settings).
+- Replace Google Ads demo with **live Google Ads API** (collect developer token + customer id + refresh token).
+- Replace Search Console demo with **live Search Console API** (OAuth refresh token).
+- Make landing-page seeding idempotent (currently only seeds when collection empty).
+- Wrap `_parse_date` in try/except in marketing endpoints → 400 instead of 500 on bad date strings.
 
-### 2026-02 — v1 MVP
-- Backend: full CRUD for landing pages; credentials store + status; analytics endpoints `/summary`, `/overview`, `/ga4/traffic-sources`, `/ga4/devices`, `/ga4/countries`, `/realtime`, `/clarity`, `/compare`. 3 LPs auto-seeded on first boot.
-- Frontend pages: Dashboard, Landing Pages (list + create dialog + delete), Landing Page Detail (8 KPI cards + traffic area chart + realtime panel + conversions/bounce line + device donut + tabs for Sources, Frustration, Sessions, Geography), Compare (dual date range + overlay chart + delta KPIs), Settings (GA4 + Clarity connect cards with step-by-step instructions).
-- Demo-mode works out-of-the-box; connection badges in header show GA4/Clarity state.
-- `data-testid` on every interactive / informational element.
-- Testing: 19/19 backend pytest tests pass, full frontend flow validated (100% success on both).
+### P2
+- AI Chatbots dashboard under "Organic updates" (Brand visibility on ChatGPT/Perplexity/Gemini).
+- Live CRM integrations (HubSpot, Salesforce, Pipedrive, custom webhook).
+- LRU cache on demo endpoints keyed on (start, end).
+- Refactor: split 1600+ line `server.py` into `routes/credentials.py`, `routes/landing_pages.py`,
+  `routes/analytics.py`, `routes/marketing.py`.
+- Defensive `minWidth/minHeight` on the Recharts ResponsiveContainer (silences a width(-1) warning).
 
-### 2026-02 — v1.1 (insights dashboards)
-- Backend: 3 new aggregate endpoints `GET /api/analytics/sources`, `/audience`, `/locations`. Each accepts optional `lp_id` (omitted / `"all"` → aggregate across every LP, concrete id → scoped + GA4 path filter). GA4 live paths added in `ga4_service.py` (sources_aggregate, sources_trend, audience_devices/browsers/os/languages/new_returning, locations_countries/cities).
-- Demo generators for the 3 endpoints deterministic per `(scope, start, end)` with 8-channel mix, 30-day trend, device/browser/OS/language splits, age/gender, affinity interests, new vs returning, and country + city breakdown with flag-friendly country codes.
-- Frontend nav: added Sources / Audience / Locations routes. Shared `InsightsFilters` component (LP dropdown incl. "All landing pages" + date range).
-- Sources page: 4 total cards, channel-mix rail, top-5-channels daily trend, searchable source/medium table with conversion-rate highlight.
-- Audience page: user totals, device donut, browser / OS bar lists, age × gender stacked bar, interests progress bars, new vs returning comparison cards, languages bar list.
-- Locations page: totals (countries / cities / sessions / conversions), countries table with flag emojis + bounce / CR / share, top cities list, auto-insight cards (most users / best CR / lowest bounce).
-- Testing: 31/31 backend pytest tests pass (12 new for insights endpoints), all new frontend pages validated (100%/100% overall).
+## Test status
+- `pytest /app/backend/tests/` — 42/44 (2 pre-existing seed-related failures unrelated to current
+  iteration). Marketing suite **17/17** including 4 hierarchy ID-consistency + sum-drift tests.
+- Frontend Playwright walk-through: all data-testids present, drill-down works, breadcrumb pills clear
+  filters individually, Reset returns to Campaigns level. Zero console errors after fix.
 
-## P0 / P1 / P2 backlog
-**P0 (blocking for real usage)** — none; app is fully functional in demo mode and live-ready once credentials are added.
-**P1 (post-MVP polish)**
-- Switch from sequential `await` in `/analytics/summary` to `asyncio.gather` for multi-LP fan-out under live credentials.
-- Invalidate Clarity cache on credential save/delete.
-- Migrate FastAPI `on_event` hooks to new lifespan context.
-- Export CSV / PNG for charts and tables.
-- Scheduled daily pull of Clarity aggregates into MongoDB for historical trend (API only exposes 1–3 days).
-**P2 (nice-to-have)**
-- Multi-workspace / multi-tenant support.
-- Alerting rules (e.g. "rage clicks > X on LP").
-- Annotation layer (mark campaign/launch dates on the traffic chart).
-- Embedded Clarity heatmap iframes per hotspot.
+## Key endpoints
+- `/api/landing-pages` — CRUD for tracked LPs
+- `/api/credentials/status`, `/api/credentials`, `/api/credentials/test`
+- `/api/cache/clear` — used by Refresh button
+- `/api/analytics/{overview, summary, sources, audience, locations, clarity, compare, realtime}`
+- `/api/analytics/ads/meta`, `/api/analytics/ads/google` — DEMO, includes campaigns + adsets/adGroups + ads
+- `/api/analytics/organic/search-console` — DEMO
+- `/api/analytics/crm` — DEMO
 
-## Next tasks
-1. Add real GA4 service-account JSON + Clarity token via Settings → verify live data flow.
-2. Add CSV export + alerting rules.
-3. Split `server.py` into routers (`credentials`, `landing_pages`, `analytics`).
+## Test credentials
+N/A — no auth in app. GA4 Service Account JSON + Clarity API token are user-supplied and stored
+in MongoDB `credentials` collection via the Settings UI.
