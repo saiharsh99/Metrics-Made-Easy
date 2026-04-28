@@ -1,16 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { api, formatNumber } from "@/lib/api";
 import { useApp } from "@/lib/app-context";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
   Area,
   AreaChart,
-  Bar,
-  BarChart,
   CartesianGrid,
-  Cell,
   Legend,
   ResponsiveContainer,
   Tooltip,
@@ -18,7 +12,8 @@ import {
   YAxis,
 } from "recharts";
 import { format, parseISO } from "date-fns";
-import { MagnifyingGlass, FacebookLogo } from "@phosphor-icons/react";
+import { FacebookLogo } from "@phosphor-icons/react";
+import AdHierarchyTable from "@/components/AdHierarchyTable";
 
 const CURRENCY = (v) => `₹${formatNumber(v)}`;
 
@@ -36,12 +31,19 @@ const OBJ_LABELS = {
   ctwa: "Click-to-WhatsApp",
 };
 
+const OBJ_FILTER_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "reach", label: "Reach" },
+  { value: "leadgen", label: "Leads" },
+  { value: "conversions", label: "Conversion" },
+  { value: "ctwa", label: "CTWA" },
+];
+
 export default function MetaAds() {
   const { range, refreshToken } = useApp();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("all");
-  const [search, setSearch] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -57,17 +59,6 @@ export default function MetaAds() {
     };
   }, [range.from, range.to, refreshToken]);
 
-  const campaigns = useMemo(() => {
-    if (!data) return [];
-    let list = data.campaigns;
-    if (tab !== "all") list = list.filter((c) => c.objectiveKey === tab);
-    if (search)
-      list = list.filter((c) =>
-        c.name.toLowerCase().includes(search.toLowerCase())
-      );
-    return list;
-  }, [data, tab, search]);
-
   return (
     <div className="space-y-8" data-testid="meta-ads-page">
       <div>
@@ -78,7 +69,8 @@ export default function MetaAds() {
           Facebook &amp; Instagram performance
         </h1>
         <p className="mt-3 text-sm text-zinc-600 max-w-2xl">
-          Reach, leads, conversions and Click-to-WhatsApp campaigns in one view.
+          Reach, leads, conversions and Click-to-WhatsApp campaigns — drill
+          from campaign down to ad set and individual ad creative.
         </p>
       </div>
 
@@ -156,46 +148,23 @@ export default function MetaAds() {
             </div>
           </section>
 
-          <section
-            className="bg-white border border-zinc-200 rounded-lg overflow-hidden"
-            data-testid="meta-campaigns-card"
-          >
-            <div className="px-6 py-4 border-b border-zinc-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.22em] font-semibold text-zinc-500 mb-1">
-                  Campaigns
-                </div>
-                <h2 className="display-font font-bold text-xl tracking-tight">
-                  Campaign performance
-                </h2>
-              </div>
-              <div className="flex items-center gap-3">
-                <Tabs value={tab} onValueChange={setTab}>
-                  <TabsList className="bg-zinc-100 border border-zinc-200">
-                    <TabsTrigger value="all" data-testid="meta-tab-all">All</TabsTrigger>
-                    <TabsTrigger value="reach" data-testid="meta-tab-reach">Reach</TabsTrigger>
-                    <TabsTrigger value="leadgen" data-testid="meta-tab-leadgen">Leads</TabsTrigger>
-                    <TabsTrigger value="conversions" data-testid="meta-tab-conversions">Conversion</TabsTrigger>
-                    <TabsTrigger value="ctwa" data-testid="meta-tab-ctwa">CTWA</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-                <div className="relative w-56">
-                  <MagnifyingGlass
-                    size={14}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-                  />
-                  <Input
-                    placeholder="Filter by name"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9 h-9"
-                    data-testid="meta-search"
-                  />
-                </div>
-              </div>
-            </div>
-            <CampaignTable rows={campaigns} kind="meta" />
-          </section>
+          <AdHierarchyTable
+            campaigns={data.campaigns}
+            midLevel={data.adsets || []}
+            ads={data.ads || []}
+            midLabel="Ad sets"
+            adParentKey="adsetId"
+            testIdPrefix="meta"
+            typeAccessor={(r) => r.objectiveKey}
+            typeColors={OBJ_COLORS}
+            typeLabels={OBJ_LABELS}
+            typeFilter={{
+              tab,
+              setTab,
+              options: OBJ_FILTER_OPTIONS,
+            }}
+            showLeadsCol
+          />
         </>
       )}
     </div>
@@ -238,9 +207,7 @@ function ObjectiveCard({ obj, accent }) {
             <Tiny label="CPA" value={`₹${obj.cpa}`} highlight />
           </>
         )}
-        {obj.roas > 0 && (
-          <Tiny label="ROAS" value={`${obj.roas}x`} highlight />
-        )}
+        {obj.roas > 0 && <Tiny label="ROAS" value={`${obj.roas}x`} highlight />}
       </div>
     </div>
   );
@@ -309,97 +276,7 @@ function KpiStrip({ totals, testId }) {
   );
 }
 
-function CampaignTable({ rows, kind }) {
-  const isMeta = kind === "meta";
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="text-[10px] uppercase tracking-[0.18em] font-semibold text-zinc-500 border-b border-zinc-200 text-left">
-            <th className="px-6 py-3">Campaign</th>
-            <th className="px-4 py-3">{isMeta ? "Objective" : "Type"}</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3 text-right">Spend</th>
-            <th className="px-4 py-3 text-right">Impr.</th>
-            <th className="px-4 py-3 text-right">Clicks</th>
-            <th className="px-4 py-3 text-right">CTR</th>
-            <th className="px-4 py-3 text-right">CPC</th>
-            {isMeta && <th className="px-4 py-3 text-right">Leads</th>}
-            <th className="px-4 py-3 text-right">Conv.</th>
-            <th className="px-4 py-3 text-right">CPA</th>
-            <th className="px-4 py-3 text-right">ROAS</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={isMeta ? 12 : 11} className="px-6 py-10 text-center text-zinc-500">
-                No campaigns match the filters.
-              </td>
-            </tr>
-          )}
-          {rows.map((c) => (
-            <tr
-              key={c.id}
-              className="border-b border-zinc-100 hover:bg-zinc-50"
-              data-testid={`campaign-${c.id}`}
-            >
-              <td className="px-6 py-3 font-semibold text-zinc-950 text-xs">
-                {c.name}
-              </td>
-              <td className="px-4 py-3 text-xs">
-                <Badge
-                  variant="outline"
-                  className="text-[10px] border-zinc-200"
-                  style={{
-                    color: isMeta ? OBJ_COLORS[c.objectiveKey] : "#09090b",
-                  }}
-                >
-                  {isMeta ? c.objectiveLabel : c.typeLabel}
-                </Badge>
-              </td>
-              <td className="px-4 py-3 text-[10px]">
-                <span
-                  className={`px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold ${
-                    c.status === "ACTIVE" || c.status === "ENABLED"
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : c.status === "PAUSED"
-                      ? "bg-amber-50 text-amber-700 border border-amber-200"
-                      : "bg-zinc-100 text-zinc-600 border border-zinc-200"
-                  }`}
-                >
-                  {c.status}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-right mono-font">{CURRENCY(c.spend)}</td>
-              <td className="px-4 py-3 text-right mono-font">{formatNumber(c.impressions)}</td>
-              <td className="px-4 py-3 text-right mono-font">{formatNumber(c.clicks)}</td>
-              <td className="px-4 py-3 text-right mono-font">{c.ctr}%</td>
-              <td className="px-4 py-3 text-right mono-font">₹{c.cpc}</td>
-              {isMeta && (
-                <td className="px-4 py-3 text-right mono-font text-emerald-700 font-semibold">
-                  {formatNumber(c.leads || 0)}
-                </td>
-              )}
-              <td className="px-4 py-3 text-right mono-font">
-                {formatNumber(c.conversions || 0)}
-              </td>
-              <td className="px-4 py-3 text-right mono-font">
-                {c.cpa ? `₹${c.cpa}` : "—"}
-              </td>
-              <td className="px-4 py-3 text-right mono-font font-semibold text-amber-700">
-                {c.roas ? `${c.roas}×` : "—"}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function mergeSeries(byKey, metric) {
-  // byKey: { reach: [{date, spend, ...}], leadgen: [...], ... }
   const dateMap = new Map();
   Object.entries(byKey).forEach(([k, list]) => {
     list.forEach((row) => {
@@ -407,9 +284,7 @@ function mergeSeries(byKey, metric) {
       dateMap.get(row.date)[k] = row[metric];
     });
   });
-  return Array.from(dateMap.values()).sort((a, b) =>
-    a.date.localeCompare(b.date)
-  );
+  return Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export { CampaignTable, KpiStrip, mergeSeries };
+export { mergeSeries, KpiStrip };

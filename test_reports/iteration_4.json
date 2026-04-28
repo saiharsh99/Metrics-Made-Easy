@@ -1,0 +1,66 @@
+{
+  "summary": "Iteration 4 verified the new 3-level hierarchy (Campaign → Ad set/Ad group → Ad) on Meta + Google ad dashboards. Added 4 hierarchy tests to /app/backend/tests/test_marketing_api.py (now 17 tests). 15/17 pass. 2 critical FAILURES expose a real product bug: ads carry adsetId / adGroupId values that do not exist in the response's adsets/adGroups arrays, so the Campaign→Adset→Ad and Campaign→AdGroup→Ad drill-down on the UI always lands on an empty 'Nothing matches the current filters' state. Reproduced live on /meta-ads and /google-ads (screenshot in tool log). Child→parent KPI sums (spend/impr/clicks/conv) match within tolerance, so the rounding helpers (_split_int, _split_proportional, _derive_child_metrics) work as designed.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "/api/analytics/ads/meta",
+        "issue": "ads[].adsetId references IDs that are NOT in adsets[].id. Cause: _meta_ads() re-calls _meta_adsets(rnd, campaigns) using the SAME rnd whose state has already advanced from the first call inside generate_meta_ads(); the second invocation produces fresh adsets with different randint() IDs. Test: TestMetaHierarchy.test_meta_adsets_and_ads_shape.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "/api/analytics/ads/google",
+        "issue": "ads[].adGroupId references IDs that are NOT in adGroups[].id. Same root cause: _gads_ads() re-calls _gads_adgroups(rnd, campaigns) on a mutated rnd. Test: TestGoogleHierarchy.test_google_adgroups_and_ads_shape.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": [
+      {"endpoint": "/api/analytics/ads/meta,google", "issue": "_meta_ads/_gads_ads do double the random work because they regenerate the entire mid level just to discard it. Even after the bug fix, they should accept the already-generated adsets/adGroups list."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Meta Ads → drill Campaign row → drill Adset row → Ads",
+        "issue": "Empty state '[data-testid=meta-ads-empty]' renders instead of any ad rows. Caused by the backend ID mismatch above. Drill-down to mid level (campaign → adsets) DOES work; only the second level → ads is broken.",
+        "affected_selectors": ["[data-testid=meta-ads-empty]", "[data-testid^=meta-row-ads-]"]
+      },
+      {
+        "flow": "Google Ads → drill Campaign row → drill Ad group row → Ads",
+        "issue": "Empty state '[data-testid=google-ads-empty]'. Same backend-side root cause.",
+        "affected_selectors": ["[data-testid=google-ads-empty]", "[data-testid^=google-row-ads-]"]
+      }
+    ],
+    "design_issues": [
+      {"screen": "/meta-ads, /google-ads", "issues": ["Console warning from recharts: 'The width(-1) and height(-1) of chart should be greater than 0' on initial mount. Cosmetic – chart still renders after layout settles, but worth a defensive minWidth/minHeight on the ResponsiveContainer."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_marketing_api.py",
+    "/app/test_reports/pytest/pytest_marketing_results.xml"
+  ],
+  "action_items": [
+    "(P0) Fix marketing_demo.py: in generate_meta_ads compute adsets ONCE and pass them into _meta_ads(rnd, adsets); same for generate_google_ads + _gads_ads(rnd, adGroups). Update those helpers to take the parent list instead of regenerating it. After the fix, re-run pytest backend/tests/test_marketing_api.py – the 2 currently-failing hierarchy tests should pass. Frontend will then populate the Ads table when a user drills Campaign→Ad set→Ads.",
+    "(P3) Add a defensive try/except around _parse_date in the four marketing endpoints so bad start_date strings return 400 instead of 500.",
+    "(P3) Set minWidth/minHeight on the recharts ResponsiveContainer in the Daily Spend chart on /meta-ads + /google-ads to silence the width(-1)/height(-1) warning."
+  ],
+  "critical_code_review_comments": [
+    "marketing_demo.py: shared rng + double-call pattern in _meta_ads/_gads_ads is the proximate bug — but it also makes ALL ad-level KPIs disconnect from the real adsets/adGroups (any future logic that assumes consistent parent metadata on ads is wrong, e.g. status/objective filters per ad will drift).",
+    "AdHierarchyTable.jsx is a clean, single-purpose component (good!). One small smell: typeFilter.tab is a controlled prop but the typeFilter.options live on the parent — fine, but note that switching tabs does NOT clear an active drill. After fix, consider clearing drill when the type filter changes (or display a hint that the drill ignores the type tab).",
+    "Frontend Crumb label uses midLabel.replace(/s$/, '') — fragile if you ever ship a label that doesn't end in 's' (e.g., 'Audience'). Pass an explicit singular label prop.",
+    "There is no caching on the demo endpoints; every page load re-generates the whole hierarchy (cheap today, but with adsets+ads added, a single /ads/meta call now runs random.sample / randint thousands of times)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_marketing_api.py (+ TestMetaHierarchy, TestGoogleHierarchy classes – 4 new tests)"
+  ],
+  "success_rate": {
+    "backend": "88% (15/17 marketing tests; 2 failing are the new hierarchy ID-consistency tests pinpointing the bug)",
+    "frontend": "Campaign and mid (Adset/AdGroup) levels render correctly, breadcrumb pills + reset work, search + objective/type filters apply on each level. Drill into Ads level renders the empty state due to the backend bug above. ~75%."
+  },
+  "test_credentials": "N/A (DEMO mode, no auth)",
+  "seed_data_creation": "None.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/test_marketing_api.py -v` after the fix – TestMetaHierarchy.test_meta_adsets_and_ads_shape and TestGoogleHierarchy.test_google_adgroups_and_ads_shape are the two regression checks for the ID-consistency bug. They assert every ad's adsetId/adGroupId is a member of the response's adsets/adGroups id-set. Tolerance for child→parent sums: ±0.05 spend, ±2 for impressions/clicks/conversions (matches what _split_int's remainder distribution can drift). Frontend smoke: after fix, drilling /meta-ads campaign → adset must show >0 rows under [data-testid^=meta-row-ads-]; same for /google-ads.",
+  "rca of the issue": "_meta_ads(rnd, campaigns) calls _meta_adsets(rnd, campaigns) a SECOND time inside generate_meta_ads, but the rnd object has already been mutated by the first call (which produced the adsets returned at the top level). The second call therefore consumes a different random stream and emits adsets with different randint() IDs. Each ad then stores adsetId from this throwaway list. Same pattern in _gads_ads → _gads_adgroups. Fix: compute the parent list once and pass it down, e.g. `adsets = _meta_adsets(rnd, campaigns); ads = _meta_ads(rnd, adsets)` and refactor _meta_ads to iterate the supplied adsets instead of regenerating them. Reproduction: GET /api/analytics/ads/meta → assert {a['adsetId'] for a in ads} ⊆ {s['id'] for s in adsets} → fails."
+}

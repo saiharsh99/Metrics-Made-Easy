@@ -99,6 +99,108 @@ class TestGoogleAds:
             assert len(series) == 14, f"trend[{key}] len={len(series)}"
 
 
+# ---------- Hierarchy: Meta + Google adsets/adgroups + ads ----------
+class TestMetaHierarchy:
+    """Iteration 4: campaign → adset → ad drill-down structure."""
+
+    def test_meta_adsets_and_ads_shape(self, client):
+        r = client.get(f"{API}/analytics/ads/meta")
+        assert r.status_code == 200
+        d = r.json()
+        # New top-level keys
+        assert "adsets" in d, "missing adsets[]"
+        assert "ads" in d, "missing ads[]"
+        adsets, ads = d["adsets"], d["ads"]
+        assert isinstance(adsets, list) and len(adsets) > 0
+        assert isinstance(ads, list) and len(ads) > 0
+
+        camp_ids = {c["id"] for c in d["campaigns"]}
+        adset_ids = {a["id"] for a in adsets}
+
+        # Each adset must reference a real campaign and have KPI fields
+        required = {"campaignId", "campaignName", "objectiveKey", "name", "status",
+                    "spend", "impressions", "clicks", "ctr", "cpc",
+                    "conversions", "leads", "cpa", "roas"}
+        for a in adsets:
+            missing = required - set(a.keys())
+            assert not missing, f"adset missing {missing}: {a}"
+            assert a["campaignId"] in camp_ids, f"adset references unknown campaign {a['campaignId']}"
+
+        # Each ad must reference a real adset + campaign
+        required_ad = {"adsetId", "adsetName", "campaignId", "campaignName", "objectiveKey",
+                       "spend", "impressions", "clicks", "ctr", "cpc", "conversions"}
+        for ad in ads:
+            missing = required_ad - set(ad.keys())
+            assert not missing, f"ad missing {missing}: {ad}"
+            assert ad["campaignId"] in camp_ids
+            assert ad["adsetId"] in adset_ids, f"ad references unknown adset {ad['adsetId']}"
+
+    def test_meta_child_sums_match_parent(self, client):
+        """Sum of adset KPIs per campaign ≈ campaign KPIs (within tolerance)."""
+        d = client.get(f"{API}/analytics/ads/meta").json()
+        adsets_by_camp = {}
+        for a in d["adsets"]:
+            adsets_by_camp.setdefault(a["campaignId"], []).append(a)
+        for c in d["campaigns"]:
+            kids = adsets_by_camp.get(c["id"], [])
+            assert kids, f"campaign {c['id']} has no adsets"
+            sum_spend = sum(k["spend"] for k in kids)
+            sum_impr = sum(k["impressions"] for k in kids)
+            sum_clicks = sum(k["clicks"] for k in kids)
+            sum_conv = sum(k["conversions"] for k in kids)
+            assert abs(sum_spend - c["spend"]) <= 0.05, f"spend mismatch {c['id']}: {sum_spend} vs {c['spend']}"
+            assert abs(sum_impr - c["impressions"]) <= 2, f"impr mismatch {c['id']}"
+            assert abs(sum_clicks - c["clicks"]) <= 2, f"clicks mismatch {c['id']}"
+            assert abs(sum_conv - c["conversions"]) <= 2, f"conv mismatch {c['id']}"
+
+
+class TestGoogleHierarchy:
+    def test_google_adgroups_and_ads_shape(self, client):
+        r = client.get(f"{API}/analytics/ads/google")
+        assert r.status_code == 200
+        d = r.json()
+        assert "adGroups" in d, "missing adGroups[]"
+        assert "ads" in d, "missing ads[]"
+        adgroups, ads = d["adGroups"], d["ads"]
+        assert isinstance(adgroups, list) and len(adgroups) > 0
+        assert isinstance(ads, list) and len(ads) > 0
+
+        camp_ids = {c["id"] for c in d["campaigns"]}
+        adgroup_ids = {g["id"] for g in adgroups}
+
+        required = {"campaignId", "typeKey", "name",
+                    "spend", "impressions", "clicks", "ctr", "cpc", "conversions"}
+        for g in adgroups:
+            missing = required - set(g.keys())
+            assert not missing, f"adgroup missing {missing}: {g}"
+            assert g["campaignId"] in camp_ids
+
+        required_ad = {"adGroupId", "adGroupName", "campaignId", "typeKey",
+                       "spend", "impressions", "clicks"}
+        for ad in ads:
+            missing = required_ad - set(ad.keys())
+            assert not missing, f"ad missing {missing}: {ad}"
+            assert ad["adGroupId"] in adgroup_ids
+            assert ad["campaignId"] in camp_ids
+
+    def test_google_child_sums_match_parent(self, client):
+        d = client.get(f"{API}/analytics/ads/google").json()
+        groups_by_camp = {}
+        for g in d["adGroups"]:
+            groups_by_camp.setdefault(g["campaignId"], []).append(g)
+        for c in d["campaigns"]:
+            kids = groups_by_camp.get(c["id"], [])
+            assert kids, f"campaign {c['id']} has no ad groups"
+            sum_spend = sum(k["spend"] for k in kids)
+            sum_impr = sum(k["impressions"] for k in kids)
+            sum_clicks = sum(k["clicks"] for k in kids)
+            sum_conv = sum(k["conversions"] for k in kids)
+            assert abs(sum_spend - c["spend"]) <= 0.05, f"spend mismatch {c['id']}: {sum_spend} vs {c['spend']}"
+            assert abs(sum_impr - c["impressions"]) <= 2
+            assert abs(sum_clicks - c["clicks"]) <= 2
+            assert abs(sum_conv - c["conversions"]) <= 2
+
+
 # ---------- Search Console ----------
 class TestSearchConsole:
     def test_default(self, client):

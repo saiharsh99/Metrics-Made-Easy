@@ -1,9 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { api, formatNumber } from "@/lib/api";
 import { useApp } from "@/lib/app-context";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
   Area,
   AreaChart,
@@ -15,8 +12,9 @@ import {
   YAxis,
 } from "recharts";
 import { format, parseISO } from "date-fns";
-import { MagnifyingGlass, GoogleLogo } from "@phosphor-icons/react";
-import { mergeSeries, KpiStrip, CampaignTable } from "@/pages/MetaAds";
+import { GoogleLogo } from "@phosphor-icons/react";
+import { mergeSeries, KpiStrip } from "@/pages/MetaAds";
+import AdHierarchyTable from "@/components/AdHierarchyTable";
 
 const TYPE_COLORS = {
   search: "#2563eb",
@@ -30,13 +28,19 @@ const TYPE_LABELS = {
   demandgen: "Demand Gen",
   pmax: "Performance Max",
 };
+const TYPE_FILTER_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "search", label: "Search" },
+  { value: "display", label: "Display" },
+  { value: "demandgen", label: "Demand Gen" },
+  { value: "pmax", label: "Pmax" },
+];
 
 export default function GoogleAds() {
   const { range, refreshToken } = useApp();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("all");
-  const [search, setSearch] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -52,17 +56,6 @@ export default function GoogleAds() {
     };
   }, [range.from, range.to, refreshToken]);
 
-  const campaigns = useMemo(() => {
-    if (!data) return [];
-    let list = data.campaigns;
-    if (tab !== "all") list = list.filter((c) => c.typeKey === tab);
-    if (search)
-      list = list.filter((c) =>
-        c.name.toLowerCase().includes(search.toLowerCase())
-      );
-    return list;
-  }, [data, tab, search]);
-
   return (
     <div className="space-y-8" data-testid="google-ads-page">
       <div>
@@ -73,8 +66,8 @@ export default function GoogleAds() {
           Search · Display · Demand Gen · Pmax
         </h1>
         <p className="mt-3 text-sm text-zinc-600 max-w-2xl">
-          A unified P&amp;L for every Google Ads campaign type — see what's
-          working, what's not, and where to shift budget.
+          A unified P&amp;L for every Google Ads campaign type — drill from
+          campaign to ad group to individual ads to see what's pulling weight.
         </p>
       </div>
 
@@ -152,46 +145,22 @@ export default function GoogleAds() {
             </div>
           </section>
 
-          <section
-            className="bg-white border border-zinc-200 rounded-lg overflow-hidden"
-            data-testid="google-campaigns-card"
-          >
-            <div className="px-6 py-4 border-b border-zinc-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.22em] font-semibold text-zinc-500 mb-1">
-                  Campaigns
-                </div>
-                <h2 className="display-font font-bold text-xl tracking-tight">
-                  Campaign performance
-                </h2>
-              </div>
-              <div className="flex items-center gap-3">
-                <Tabs value={tab} onValueChange={setTab}>
-                  <TabsList className="bg-zinc-100 border border-zinc-200">
-                    <TabsTrigger value="all" data-testid="g-tab-all">All</TabsTrigger>
-                    <TabsTrigger value="search" data-testid="g-tab-search">Search</TabsTrigger>
-                    <TabsTrigger value="display" data-testid="g-tab-display">Display</TabsTrigger>
-                    <TabsTrigger value="demandgen" data-testid="g-tab-demandgen">Demand Gen</TabsTrigger>
-                    <TabsTrigger value="pmax" data-testid="g-tab-pmax">Pmax</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-                <div className="relative w-56">
-                  <MagnifyingGlass
-                    size={14}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
-                  />
-                  <Input
-                    placeholder="Filter by name"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9 h-9"
-                    data-testid="google-search"
-                  />
-                </div>
-              </div>
-            </div>
-            <CampaignTable rows={campaigns} kind="google" />
-          </section>
+          <AdHierarchyTable
+            campaigns={data.campaigns}
+            midLevel={data.adGroups || []}
+            ads={data.ads || []}
+            midLabel="Ad groups"
+            adParentKey="adGroupId"
+            testIdPrefix="google"
+            typeAccessor={(r) => r.typeKey}
+            typeColors={TYPE_COLORS}
+            typeLabels={TYPE_LABELS}
+            typeFilter={{
+              tab,
+              setTab,
+              options: TYPE_FILTER_OPTIONS,
+            }}
+          />
         </>
       )}
     </div>
